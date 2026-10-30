@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.egg-info/
+.env
+.cache/
+.pytest_cache/
+~$*.xlsx
+web/node_modules/
+web/dist/
+data/imports/
+outputs/
+*.tsbuildinfo
+# Exports Tamtam : données du cas, non publiées. Les déposer dans data/ ou via l'onglet Import.
+data/*.xlsx
