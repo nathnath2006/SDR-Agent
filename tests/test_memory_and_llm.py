@@ -62,7 +62,7 @@ class FakeLLM(LLMClient):
 def test_llm_writes_but_does_not_decide(tmp_path, monkeypatch):
     offline = agent.run(DATA, tmp_path / "off", provider="none", web=False, run_date=date(2026, 10, 29))
     fake = FakeLLM()
-    monkeypatch.setattr(agent, "get_llm", lambda provider, cache_dir, api_key=None: fake)
+    monkeypatch.setattr(agent, "get_llm", lambda provider, cache_dir, api_key=None, model=None: fake)
     result = agent.run(DATA, tmp_path, provider="fake", web=True, run_date=date(2026, 10, 29))
 
     # Mêmes décisions qu'en mode règles seules.

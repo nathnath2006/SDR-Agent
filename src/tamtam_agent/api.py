@@ -3,35 +3,48 @@
     tamtam-agent serve        # http://localhost:8000
 
 Parcours : importer un export -> le valider (regroupements) -> lancer l'analyse
--> consulter le Top 20 et l'historique. Dossiers relatifs à TAMTAM_ROOT
-(par défaut : le dossier courant).
+-> consulter le Top 20 et l'historique.
+
+Variables d'environnement :
+- TAMTAM_ROOT : dossier de l'application (front compilé, .env) ; par défaut le dossier courant ;
+- TAMTAM_STORE : où écrire imports, analyses et cache (un bucket monté en ligne) ; par défaut TAMTAM_ROOT ;
+- APP_PASSWORD : si défini, l'API exige une connexion par mot de passe.
+
+Chaque utilisateur apporte sa clé LLM : elle reste dans son navigateur et n'est
+envoyée qu'avec ses analyses ; le serveur ne la stocke ni ne la journalise.
 """
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import logging
 import os
 import re
 import threading
+import time
+from typing import Literal
 from collections import deque
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import agent, config, importer, outputs, settings
-from .llm import LLMError, get_llm
+from .llm import DEFAULT_MODELS, LLMError, get_llm
 
 ROOT = Path(os.getenv("TAMTAM_ROOT", Path.cwd())).resolve()
-IMPORTS_DIR = ROOT / "data" / "imports"
-OUT_DIR = ROOT / "outputs"
+STORE = Path(os.getenv("TAMTAM_STORE", ROOT)).resolve()
+IMPORTS_DIR = STORE / "data" / "imports"
+OUT_DIR = STORE / "outputs"
 RUNS_DIR = OUT_DIR / "runs"
-CACHE_DIR = ROOT / ".cache" / "llm"
+CACHE_DIR = STORE / ".cache" / "llm"
 WEB_DIST = ROOT / "web" / "dist"
+SESSION_COOKIE = "tamtam_session"
 ID_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{6}$")
 DOWNLOADS = {
     "top20.md": "text/markdown",
@@ -45,10 +58,59 @@ DOWNLOADS = {
 app = FastAPI(title="tamtam-agent")
 
 
+# --- Accès par mot de passe (actif seulement si APP_PASSWORD est défini) -------------------
+def _session_token() -> str | None:
+    password = os.getenv("APP_PASSWORD")
+    if not password:
+        return None
+    return hmac.new(password.encode(), b"tamtam-session-v1", hashlib.sha256).hexdigest()
+
+
+def _authenticated(request: Request) -> bool:
+    token = _session_token()
+    return token is None or hmac.compare_digest(request.cookies.get(SESSION_COOKIE, ""), token)
+
+
+@app.middleware("http")
+async def require_password(request: Request, call_next):
+    path = request.url.path
+    if path.startswith("/api/") and path not in ("/api/session", "/api/login") and not _authenticated(request):
+        return JSONResponse({"detail": "connexion requise"}, status_code=401)
+    return await call_next(request)
+
+
+@app.get("/api/session")
+def session(request: Request) -> dict:
+    return {"protege": _session_token() is not None, "connecte": _authenticated(request)}
+
+
+class Login(BaseModel):
+    password: str
+
+
+@app.post("/api/login")
+def login(body: Login, request: Request, response: Response) -> dict:
+    token = _session_token()
+    if token is None:
+        return {"connecte": True}
+    if not hmac.compare_digest(body.password.encode(), os.environ["APP_PASSWORD"].encode()):
+        time.sleep(1)   # freine les essais en série
+        raise HTTPException(401, "mot de passe incorrect")
+    https = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+    response.set_cookie(SESSION_COOKIE, token, max_age=30 * 24 * 3600, httponly=True, samesite="lax", secure=https)
+    return {"connecte": True}
+
+
+@app.post("/api/logout")
+def logout(response: Response) -> dict:
+    response.delete_cookie(SESSION_COOKIE)
+    return {"connecte": False}
+
+
 @app.get("/api/config")
 def get_config() -> dict:
     return {
-        "llm": settings.describe(),
+        "models": {p: os.getenv(var, DEFAULT_MODELS[p]) for p, var in settings.MODEL_VARS.items()},
         "rules": {"recent_days": config.WINDOW_RECENT_DAYS, "max_days": config.WINDOW_MAX_DAYS,
                   "size_min": config.SIZE_MIN, "size_max": config.SIZE_MAX, "top_n": config.TOP_N},
     }
@@ -100,8 +162,16 @@ def _import_dir(import_id: str) -> Path:
 
 
 # --- Analyse (une à la fois, en arrière-plan) -------------------------------------------
+class LlmChoice(BaseModel):
+    """Clé de l'utilisateur, utilisée le temps d'une requête, jamais écrite."""
+    provider: Literal["gemini", "anthropic"]
+    api_key: str = Field(min_length=8)
+    model: str | None = None
+
+
 class AnalyzeRequest(BaseModel):
     web: bool = True
+    llm: LlmChoice | None = None   # sans clé : décisions calculées, aucun texte rédigé
 
 
 class _Job:
@@ -142,11 +212,11 @@ def analyze(import_id: str, req: AnalyzeRequest) -> dict:
         JOB.state, JOB.message, JOB.run, JOB.import_id = "running", "Analyse en cours", None, import_id
         JOB.logs.clear()
         JOB.started = datetime.now().isoformat(timespec="seconds")
-    threading.Thread(target=_execute, args=(folder, decisions, req.web), daemon=True).start()
+    threading.Thread(target=_execute, args=(folder, decisions, req.web, req.llm), daemon=True).start()
     return JOB.as_dict()
 
 
-def _execute(folder: Path, decisions: dict[str, bool], web: bool) -> None:
+def _execute(folder: Path, decisions: dict[str, bool], web: bool, llm: LlmChoice | None) -> None:
     logger = logging.getLogger("tamtam_agent")
     handler = _JobLogHandler()
     logger.addHandler(handler)
@@ -154,7 +224,8 @@ def _execute(folder: Path, decisions: dict[str, bool], web: bool) -> None:
     try:
         meta = json.loads((folder / "meta.json").read_text())
         result = agent.run(folder / "source.xlsx", OUT_DIR, web=web, cache_dir=CACHE_DIR,
-                           group_decisions=decisions)
+                           group_decisions=decisions, provider=llm.provider if llm else "none",
+                           api_key=llm.api_key if llm else None, model=llm.model if llm else None)
         result.source = meta["fichier"]
         outputs.write_all(result, OUT_DIR)
         (RUNS_DIR / result.run_id / "import.json").write_text(json.dumps({"import_id": folder.name, **meta}))
@@ -227,28 +298,11 @@ def _run_dir(run_id: str) -> Path:
     return RUNS_DIR / run_id
 
 
-# --- Paramètres LLM ---------------------------------------------------------------------
-class SettingsRequest(BaseModel):
-    provider: str
-    api_key: str | None = None
-    model: str | None = None
-
-
-@app.post("/api/settings")
-def save_settings(req: SettingsRequest) -> dict:
-    try:
-        settings.save(ROOT / ".env", req.provider, req.api_key, req.model)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
-    return settings.describe()
-
-
-@app.post("/api/settings/test")
-def test_settings() -> dict:
-    """Appel minimal au fournisseur actif, pour vérifier la clé."""
-    llm = get_llm("auto")
-    if llm is None:
-        raise HTTPException(400, "aucune clé enregistrée")
+# --- Clé de l'utilisateur : vérification ------------------------------------------------
+@app.post("/api/llm/test")
+def test_llm(choice: LlmChoice) -> dict:
+    """Appel minimal avec la clé fournie, pour la vérifier. Rien n'est conservé."""
+    llm = get_llm(choice.provider, None, choice.api_key, choice.model)
     schema = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"],
               "additionalProperties": False}
     try:

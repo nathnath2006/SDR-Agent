@@ -109,9 +109,10 @@ def extract_json(text: str) -> dict:
         raise LLMError(f"JSON introuvable dans la réponse : {text[:200]!r}") from exc
 
 
-def get_llm(provider: str = "auto", cache_dir: Path | None = None, api_key: str | None = None) -> LLMClient | None:
+def get_llm(provider: str = "auto", cache_dir: Path | None = None, api_key: str | None = None,
+            model: str | None = None) -> LLMClient | None:
     """Choisit le fournisseur. 'auto' : celui des réglages, sinon celui dont la clé existe,
-    sinon None (décisions calculées, aucun texte rédigé). `api_key` remplace la variable d'environnement."""
+    sinon None (décisions calculées, aucun texte rédigé). `api_key` et `model` remplacent l'environnement."""
     provider = (provider or "auto").lower()
     if provider == "none":
         return None
@@ -122,8 +123,8 @@ def get_llm(provider: str = "auto", cache_dir: Path | None = None, api_key: str 
             return None
     if provider == "anthropic":
         from .anthropic_provider import AnthropicClient
-        return AnthropicClient(os.getenv("ANTHROPIC_MODEL", DEFAULT_MODELS["anthropic"]), cache_dir, api_key)
+        return AnthropicClient(model or os.getenv("ANTHROPIC_MODEL", DEFAULT_MODELS["anthropic"]), cache_dir, api_key)
     if provider == "gemini":
         from .gemini_provider import GeminiClient
-        return GeminiClient(os.getenv("GEMINI_MODEL", DEFAULT_MODELS["gemini"]), cache_dir, api_key)
+        return GeminiClient(model or os.getenv("GEMINI_MODEL", DEFAULT_MODELS["gemini"]), cache_dir, api_key)
     raise ValueError(f"Fournisseur LLM inconnu : {provider} (anthropic, gemini, auto, none)")

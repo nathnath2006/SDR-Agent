@@ -14,7 +14,7 @@ export function TierBadge({ tier, toQualify, className }: { tier: Tier; toQualif
         "inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1.5 text-xs font-semibold",
         tier === "A" && "bg-tier-a text-white",
         tier === "B" && "bg-tier-b text-white",
-        tier === "C" && "bg-tier-c/15 text-tier-c ring-1 ring-tier-c/40 ring-inset",
+        tier === "C" && "bg-tier-c/12 text-tier-c ring-1 ring-tier-c/40 ring-inset",
         tier === "D" && "bg-muted text-muted-foreground",
         tier === "-" && "bg-tier-client/15 text-tier-client",
         className,
@@ -38,7 +38,7 @@ export function StatusText({ status }: { status: Status }) {
       <span
         className={cn(
           "size-1.5 rounded-full",
-          status === "qualifié" && "bg-tier-a",
+          status === "qualifié" && "bg-why-green",
           status === "à creuser" && "bg-tier-c",
           status === "disqualifié" && "bg-muted-foreground/50",
         )}
@@ -53,7 +53,7 @@ export function StatCard({ label, value, hint, tone }: { label: string; value: R
     <Card size="sm" className="gap-1">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
-        <div className={cn("text-2xl font-semibold tracking-tight tabular-nums", tone === "warn" && "text-tier-c")}>{value}</div>
+        <div className={cn("font-display text-3xl leading-tight tabular-nums", tone === "warn" && "text-tier-c")}>{value}</div>
       </CardHeader>
       {hint && <CardContent className="text-xs text-muted-foreground">{hint}</CardContent>}
     </Card>
@@ -106,7 +106,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-4xl leading-none">{title}</h1>
         {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

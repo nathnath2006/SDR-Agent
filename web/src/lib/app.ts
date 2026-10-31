@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { Account, Role } from "@/types";
+import type { Account, LlmProvider, Role } from "@/types";
 
 // --- Navigation : #/page/param1/param2 -------------------------------------------
 export type Page = "import" | "analyse" | "historique" | "doc" | "parametres";
@@ -31,13 +31,13 @@ export const go = (page: Page, ...params: (string | number)[]) => {
 
 // --- Apparence : mode et thème, propres à ce navigateur -----------------------------
 export type Mode = "clair" | "sombre" | "systeme";
-export type Theme = "neutre" | "bleu" | "vert" | "violet" | "orange";
+export type Theme = "tamtam" | "bleu" | "nuit" | "violet" | "orange";
 export const THEMES: { id: Theme; label: string; swatch: string }[] = [
-  { id: "neutre", label: "Neutre", swatch: "oklch(0.3 0 0)" },
-  { id: "bleu", label: "Bleu", swatch: "oklch(0.55 0.2 260)" },
-  { id: "vert", label: "Vert", swatch: "oklch(0.55 0.14 155)" },
-  { id: "violet", label: "Violet", swatch: "oklch(0.55 0.2 295)" },
-  { id: "orange", label: "Orange", swatch: "oklch(0.65 0.17 55)" },
+  { id: "tamtam", label: "Tamtam", swatch: "#1c1c1c" },
+  { id: "bleu", label: "Bleu", swatch: "#0c31c1" },
+  { id: "nuit", label: "Bleu nuit", swatch: "#0c1c5a" },
+  { id: "violet", label: "Violet", swatch: "#8a4fe0" },
+  { id: "orange", label: "Orange", swatch: "#f18101" },
 ];
 
 function read<T extends string>(key: string, fallback: T): T {
@@ -50,7 +50,10 @@ function read<T extends string>(key: string, fallback: T): T {
 
 export function useAppearance() {
   const [mode, setMode] = useState<Mode>(() => read("tamtam-mode", "systeme"));
-  const [theme, setTheme] = useState<Theme>(() => read("tamtam-theme", "neutre"));
+  const [theme, setTheme] = useState<Theme>(() => {
+    const stored = read<Theme>("tamtam-theme", "tamtam");
+    return THEMES.some((t) => t.id === stored) ? stored : "tamtam";
+  });
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -109,4 +112,49 @@ export function matches(a: Account, query: string): boolean {
   if (!query) return true;
   const q = query.toLowerCase();
   return [a.compte, a.raison, a.pays, a.secteur, ...a.entites].some((x) => x?.toLowerCase().includes(q));
+}
+
+// --- Clé LLM de l'utilisateur : gardée dans ce navigateur, envoyée seulement avec ses analyses ---
+export interface LlmChoice {
+  provider: LlmProvider;
+  model: string;
+  api_key: string;
+}
+
+const LLM_KEY = "tamtam-llm";
+
+export function readLlm(): LlmChoice | null {
+  try {
+    const raw = localStorage.getItem(LLM_KEY);
+    const v = raw ? (JSON.parse(raw) as LlmChoice) : null;
+    return v?.api_key ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export function useLlm() {
+  const [llm, setLlm] = useState<LlmChoice | null>(readLlm);
+  useEffect(() => {
+    const onChange = () => setLlm(readLlm());
+    window.addEventListener("tamtam-llm-change", onChange);
+    window.addEventListener("storage", onChange);
+    return () => {
+      window.removeEventListener("tamtam-llm-change", onChange);
+      window.removeEventListener("storage", onChange);
+    };
+  }, []);
+  const save = (value: LlmChoice | null) => {
+    try {
+      if (value) localStorage.setItem(LLM_KEY, JSON.stringify(value));
+      else localStorage.removeItem(LLM_KEY);
+    } catch { /* navigation privée : la clé ne sera pas mémorisée */ }
+    setLlm(value);
+    window.dispatchEvent(new Event("tamtam-llm-change"));
+  };
+  return { llm, save };
+}
+
+export function maskKey(key: string): string {
+  return key.length > 8 ? `…${key.slice(-4)}` : "définie";
 }

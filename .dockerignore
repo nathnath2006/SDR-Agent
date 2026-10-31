@@ -1,10 +1,11 @@
-.venv
-.git
 .cache
 .env
 outputs
+data
 web/node_modules
 web/dist
 **/__pycache__
 *.egg-info
 .pytest_cache
+.venv
+.git

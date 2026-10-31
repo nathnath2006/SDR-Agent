@@ -13,13 +13,12 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AccountSheet, AccountTable, sortAccounts, type Sort, type SortKey } from "@/components/accounts";
 import { EmptyState, PageHeader, StatCard } from "@/components/blocks";
-import { frDate, go, matches, runDate } from "@/lib/app";
-import type { Account, Config, ImportSummary, Job, RunData, Status, Tier } from "@/types";
+import { frDate, go, matches, runDate, useLlm } from "@/lib/app";
+import type { Account, ImportSummary, Job, RunData, Status, Tier } from "@/types";
 
 type View = "top" | "tous" | "surveiller" | "clients";
 
-export function AnalysePage({ config, runId, accountId, latestRun, onRunsChanged }: {
-  config: Config;
+export function AnalysePage({ runId, accountId, latestRun, onRunsChanged }: {
   runId?: string;
   accountId?: string;
   latestRun?: string;
@@ -45,7 +44,7 @@ export function AnalysePage({ config, runId, accountId, latestRun, onRunsChanged
         description="Lance l'agent sur un import validé : il sort les 20 comptes à appeler en premier, avec le pourquoi."
         actions={data && <Exports data={data} />}
       />
-      <Launcher config={config} onDone={onDone} />
+      <Launcher onDone={onDone} />
       {shownRun && !data && <p className="text-sm text-muted-foreground">Chargement des résultats…</p>}
       {data && <Results data={data} accountId={accountId} />}
       {!shownRun && <EmptyState title="Pas encore de résultat">Valide un import puis lance l'analyse.</EmptyState>}
@@ -53,14 +52,15 @@ export function AnalysePage({ config, runId, accountId, latestRun, onRunsChanged
   );
 }
 
-function Launcher({ config, onDone }: { config: Config; onDone: (run: string) => void }) {
+function Launcher({ onDone }: { onDone: (run: string) => void }) {
   const [imports, setImports] = useState<ImportSummary[]>([]);
   const [importId, setImportId] = useState<string>("");
   const [web, setWeb] = useState(true);
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState("");
   const running = job?.state === "running";
-  const provider = config.llm.provider;
+  const { llm } = useLlm();
+  const provider = llm?.provider;
 
   useEffect(() => {
     api.imports().then((list) => {
@@ -84,7 +84,7 @@ function Launcher({ config, onDone }: { config: Config; onDone: (run: string) =>
   const start = async () => {
     setError("");
     try {
-      setJob(await api.analyze(importId, Boolean(provider) && web));
+      setJob(await api.analyze(importId, Boolean(llm) && web, llm));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -108,8 +108,8 @@ function Launcher({ config, onDone }: { config: Config; onDone: (run: string) =>
         <CardTitle>Lancer une analyse</CardTitle>
         <CardDescription>
           {provider
-            ? `Rédaction par ${provider === "gemini" ? "Gemini" : "Anthropic"} (${config.llm.providers[provider].model}). Les statuts et paliers sont calculés par les règles.`
-            : <>Aucune clé LLM : statuts, paliers et Top 20 sont calculés, mais aucun texte n'est rédigé. <button className="underline underline-offset-4" onClick={() => go("parametres")}>Ajouter une clé</button></>}
+            ? `Rédaction avec ta clé ${provider === "gemini" ? "Gemini" : "Anthropic"} (${llm?.model}). Les statuts et paliers sont calculés par les règles.`
+            : <>Tu n'as pas de clé LLM : statuts, paliers et Top 20 seront calculés, sans texte rédigé. <button className="underline underline-offset-4" onClick={() => go("parametres")}>Ajouter ta clé</button></>}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -127,7 +127,7 @@ function Launcher({ config, onDone }: { config: Config; onDone: (run: string) =>
             <Switch id="web" checked={Boolean(provider) && web} disabled={!provider || running} onCheckedChange={setWeb} />
             <Label htmlFor="web" className="font-normal">Vérifier sur le web si les 20 comptes ont déjà une marketplace</Label>
           </div>
-          <Button onClick={start} disabled={running || !importId} className="ml-auto"><Play />{running ? "Analyse en cours…" : "Lancer l'analyse"}</Button>
+          <Button onClick={start} disabled={running || !importId} className="bg-brand-yellow text-[#1c1c1c] hover:bg-brand-yellow/85 ml-auto"><Play />{running ? "Analyse en cours…" : "Lancer l'analyse"}</Button>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         {job && job.state !== "idle" && (

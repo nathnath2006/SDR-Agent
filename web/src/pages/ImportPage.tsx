@@ -329,7 +329,7 @@ function Validation({ detail, onValidated }: { detail: ImportDetail; onValidated
         </Card>
       ))}
       <div className="flex flex-wrap items-center gap-3">
-        <Button onClick={save} disabled={saving}>{detail.valide ? "Mettre à jour la validation" : "Valider les données"}</Button>
+        <Button onClick={save} disabled={saving} className={cn(!detail.valide && "bg-brand-yellow text-[#1c1c1c] hover:bg-brand-yellow/85")}>{detail.valide ? "Mettre à jour la validation" : "Valider les données"}</Button>
         {detail.valide && <Button variant="outline" onClick={() => go("analyse")}>Passer à l'analyse</Button>}
         {detail.validation && <span className="text-sm text-muted-foreground">Validé le {frDateTime(detail.validation.valide_le)}</span>}
         {error && <span className="text-sm text-destructive">{error}</span>}

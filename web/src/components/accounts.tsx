@@ -130,7 +130,7 @@ export function AccountSheet({ account: a, explained, onClose }: { account: Acco
         <SheetHeader className="border-b">
           <div className="flex items-center gap-2">
             <TierBadge tier={a.palier} toQualify={a.a_qualifier} />
-            <SheetTitle className="text-lg">{a.compte}</SheetTitle>
+            <SheetTitle className="font-display text-2xl leading-none">{a.compte}</SheetTitle>
           </div>
           <SheetDescription className="flex flex-wrap gap-x-3 gap-y-1">
             <StatusText status={a.statut} />
@@ -157,8 +157,13 @@ export function AccountSheet({ account: a, explained, onClose }: { account: Acco
 
           {pitch ? (
             <>
-              <div className="rounded-lg bg-muted/60 p-3">
-                <p className="mb-1 text-xs font-medium text-muted-foreground">Pourquoi maintenant</p>
+              <div className="space-y-2 rounded-lg border bg-card p-3">
+                <p className="text-sm text-muted-foreground">Pourquoi maintenant ?</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {signals.filter((s) => s.role === "déclencheur" || s.role === "amplificateur").slice(0, 3).map((s) => (
+                    <span key={s.event_id} className={cn("why", s.role === "déclencheur" ? "text-why-blue" : "text-why-violet")}>{s.libelle}</span>
+                  ))}
+                </div>
                 <p className="text-sm leading-relaxed">{pitch.pourquoi_maintenant}</p>
               </div>
               {pitch.ce_qui_a_change && (
@@ -225,7 +230,8 @@ export function AccountSheet({ account: a, explained, onClose }: { account: Acco
                   <li key={s.event_id} id={`ev-${s.event_id}`} className={cn("grid grid-cols-[92px_1fr] gap-3 rounded-md py-2", focus === s.event_id && "bg-primary/10")}>
                     <div className="text-xs text-muted-foreground">{frDate(s.date)}<br />{s.age_jours} j · {s.event_id}</div>
                     <div>
-                      <Badge variant={s.role === "déclencheur" ? "default" : "secondary"} className="mb-1">{ROLE_LABEL[s.role]}</Badge>
+                      <span className={cn("why mb-1", s.role === "déclencheur" && "text-why-blue", s.role === "amplificateur" && "text-why-violet",
+                                          s.role === "contexte" && "text-why-green", s.role === "client_mirakl" && "text-tier-client")}>{ROLE_LABEL[s.role]}</span>
                       <p>{s.libelle}</p>
                       <p className="text-xs text-muted-foreground">{s.raison}{s.origine && `, ${s.origine}`}</p>
                     </div>

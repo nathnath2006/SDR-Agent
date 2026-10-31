@@ -29,7 +29,7 @@ docker run -p 8000:8000 --env-file .env -v "$PWD/data:/app/data" -v "$PWD/output
 
 ## Le parcours
 
-1. **Paramètres** : modèle et clé API (Gemini ou Anthropic, enregistrée dans `.env`), mode jour / nuit, thème.
+1. **Paramètres** : ta clé API (Gemini ou Anthropic) et le modèle, mode jour / nuit, thème. **Chacun apporte sa clé** : elle reste dans son navigateur et n'est envoyée qu'avec ses analyses ; le serveur ne la stocke pas.
 2. **Import** : dépose l'export. Contrôle les feuilles, les chiffres (événements par type et détail, période, régions, tailles, secteurs), les pays suspects et ce qui a été ignoré ; **valide les doublons et groupes** (fusionner ou garder séparés).
 3. **Analyse** : lance l'agent sur l'import validé. Il sort le Top 20 ; un clic sur un compte ouvre sa fiche (pourquoi maintenant, angles d'approche, points à vérifier, signaux, fit).
 4. **Historique** : chaque analyse, la composition de son Top 20 et les comptes entrés ou sortis depuis la précédente.
@@ -37,7 +37,7 @@ docker run -p 8000:8000 --env-file .env -v "$PWD/data:/app/data" -v "$PWD/output
 
 Sans clé LLM, tout est calculé (statuts, paliers, Top 20) mais aucun texte n'est rédigé.
 
-En ligne de commande, sans interface : `.venv/bin/tamtam-agent run --data export.xlsx` (tous les regroupements fusionnés).
+En ligne de commande, sans interface : `.venv/bin/tamtam-agent run --data export.xlsx` (tous les regroupements fusionnés ; clé lue dans `.env`, voir `.env.example`).
 
 ## Les règles en bref
 
@@ -74,6 +74,35 @@ data/imports/<id>/          fichier importé, inspection, validation du SDR
 outputs/runs/<id>/          une analyse : top20.md, tam_priorise.xlsx/.csv, explications.jsonl, meta.json
 outputs/memoire.csv         une ligne par entreprise, comparée d'une analyse à l'autre
 ```
+
+## Déploiement Cloud Run
+
+L'image Docker tourne telle quelle sur Google Cloud Run. Configuration utilisée :
+
+| Élément | Réglage |
+|---|---|
+| Accès | `APP_PASSWORD` (Secret Manager) : écran de connexion, cookie de session ; toute l'API est fermée sans lui |
+| Données | bucket Cloud Storage monté sur `/mnt/store`, `TAMTAM_STORE=/mnt/store` (imports, analyses, historique) |
+| Instances | une seule (`--max-instances 1`), éteinte au repos (`--min-instances 0`), CPU gardé pendant l'analyse (`--no-cpu-throttling`) |
+| Clé LLM | aucune côté serveur : chaque utilisateur apporte la sienne |
+
+```bash
+PROJECT=mon-projet; BUCKET=$PROJECT-data
+gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
+  secretmanager.googleapis.com storage.googleapis.com --project $PROJECT
+gcloud storage buckets create gs://$BUCKET --project $PROJECT --location europe-west1 \
+  --uniform-bucket-level-access --public-access-prevention
+printf 'mot-de-passe' | gcloud secrets create app-password --project $PROJECT --data-file=-
+# Donner au compte de service de Cloud Run : secretmanager.secretAccessor (secret),
+# storage.objectAdmin (bucket), run.builder (projet).
+gcloud run deploy sdr-agent --source . --project $PROJECT --region europe-west1 \
+  --allow-unauthenticated --execution-environment gen2 \
+  --min-instances 0 --max-instances 1 --no-cpu-throttling --memory 1Gi --timeout 3600 \
+  --set-secrets APP_PASSWORD=app-password:latest --set-env-vars TAMTAM_STORE=/mnt/store \
+  --add-volume name=store,type=cloud-storage,bucket=$BUCKET --add-volume-mount volume=store,mount-path=/mnt/store
+```
+
+`.gcloudignore` garde `.env`, `data/` et `outputs/` hors du build. Pour changer le mot de passe : ajouter une version au secret `app-password`, puis `gcloud run services update sdr-agent`.
 
 ## Développement
 

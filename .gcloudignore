@@ -1,0 +1,15 @@
+# Rien de secret ni de données client dans le build Cloud Build.
+.env
+.git
+.gitignore
+.venv
+.cache
+.pytest_cache
+data/
+outputs/
+web/node_modules/
+web/dist/
+**/__pycache__
+*.egg-info
+*.tsbuildinfo
+tests/

@@ -45,7 +45,7 @@ def new_run_id() -> str:
 def run(data_path: Path, out_dir: Path, provider: str = "auto", web: bool = True,
         top_n: int = config.TOP_N, cache_dir: Path | None = None, run_date: date | None = None,
         api_key: str | None = None, group_decisions: dict[str, bool] | None = None,
-        run_id: str | None = None) -> RunResult:
+        run_id: str | None = None, model: str | None = None) -> RunResult:
     run_date = run_date or date.today()
     run_id = run_id or new_run_id()
     data = load_case_data(data_path)
@@ -53,7 +53,7 @@ def run(data_path: Path, out_dir: Path, provider: str = "auto", web: bool = True
     run_dir = out_dir / "runs" / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    llm = get_llm(provider, cache_dir, api_key)
+    llm = get_llm(provider, cache_dir, api_key, model)
     if llm:
         llm.log_path = run_dir / "llm_log.jsonl"
     llm_label = f"{llm.provider} / {llm.model}" if llm else "aucun (règles seules)"

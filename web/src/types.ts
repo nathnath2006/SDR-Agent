@@ -156,13 +156,8 @@ export interface ImportDetail extends ImportSummary {
   inspection: Inspection;
 }
 
-export interface LlmSettings {
-  provider: LlmProvider | null;
-  providers: Record<LlmProvider, { key_set: boolean; key_hint: string; model: string }>;
-}
-
 export interface Config {
-  llm: LlmSettings;
+  models: Record<LlmProvider, string>;
   rules: { recent_days: number; max_days: number; size_min: number; size_max: number; top_n: number };
 }
 
