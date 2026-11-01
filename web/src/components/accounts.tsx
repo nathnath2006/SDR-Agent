@@ -155,7 +155,15 @@ export function AccountSheet({ account: a, explained, onClose }: { account: Acco
             {a.entites.length > 1 && (<><dt className="text-muted-foreground">Groupe</dt><dd>{a.entites.join(", ")}</dd></>)}
           </dl>
 
-          {pitch ? (
+          {/* Toujours affichée : la raison est tronquée dans le tableau. */}
+          <div className="space-y-1 rounded-lg border bg-muted/40 p-3">
+            <p className="text-xs font-medium text-muted-foreground">Raison</p>
+            <p className="text-sm leading-relaxed">
+              {a.raison || (explained ? a.regle_palier : "Pas de texte rédigé : l'analyse a tourné sans clé LLM. Ajoute une clé dans Paramètres puis relance.")}
+            </p>
+          </div>
+
+          {pitch && (
             <>
               <div className="space-y-2 rounded-lg border bg-card p-3">
                 <p className="text-sm text-muted-foreground">Pourquoi maintenant ?</p>
@@ -187,13 +195,7 @@ export function AccountSheet({ account: a, explained, onClose }: { account: Acco
                 </Section>
               )}
             </>
-          ) : a.raison ? (
-            <Section title="Raison"><p className="text-sm">{a.raison}</p></Section>
-          ) : !explained ? (
-            <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-              Pas de texte rédigé : l'analyse a tourné sans clé LLM. Ajoute une clé dans Paramètres puis relance.
-            </p>
-          ) : null}
+          )}
 
           {(web || a.rang_top) && (
             <Section title="Marketplace aujourd'hui">
