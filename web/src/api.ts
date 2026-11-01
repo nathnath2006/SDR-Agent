@@ -40,3 +40,22 @@ export const api = {
   fileUrl: (run: string, name: string) => `/api/runs/${run}/files/${name}`,
   memoryUrl: "/api/memory",
 };
+
+/** Télécharge un fichier de l'API. Passer par un blob évite qu'un navigateur (Safari) ignore
+    le téléchargement lancé depuis un menu qui se referme, et permet d'afficher une erreur. */
+export async function download(path: string, filename: string): Promise<void> {
+  const res = await fetch(path);
+  if (res.status === 401) window.dispatchEvent(new Event(UNAUTHORIZED));
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(typeof body.detail === "string" ? body.detail : `${res.status} ${res.statusText}`);
+  }
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}

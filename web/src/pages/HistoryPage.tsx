@@ -1,6 +1,6 @@
 import { Download } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
-import { api } from "@/api";
+import { api, download } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +23,7 @@ export function HistoryPage({ runs }: { runs: RunMeta[] }) {
       <PageHeader
         title="Historique"
         description="Chaque analyse lancée, et ce qui a changé dans le Top 20 par rapport à la précédente."
-        actions={runs.length > 0 && <Button variant="outline" asChild><a href={api.memoryUrl} download><Download />Mémoire (CSV)</a></Button>}
+        actions={runs.length > 0 && <Button variant="outline" onClick={() => download(api.memoryUrl, "memoire.csv").catch((e) => window.alert((e as Error).message))}><Download />Mémoire (CSV)</Button>}
       />
       {runs.length === 0 ? <EmptyState title="Aucune analyse pour l'instant">Les analyses lancées depuis l'onglet Analyse apparaîtront ici.</EmptyState> : (
         <>
