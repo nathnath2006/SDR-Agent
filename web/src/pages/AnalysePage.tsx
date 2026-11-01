@@ -149,10 +149,12 @@ function Exports({ data }: { data: RunData }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild><Button variant="outline"><Download />Exporter</Button></DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        {/* Le menu se ferme avant qu'un lien ne soit suivi : on lance le téléchargement à la sélection.
+            Le serveur répond en pièce jointe, la page reste affichée. */}
         {data.files.map((f) => (
-          <DropdownMenuItem key={f} asChild><a href={api.fileUrl(data.meta.run_id, f)} download>{f}</a></DropdownMenuItem>
+          <DropdownMenuItem key={f} onSelect={() => window.location.assign(api.fileUrl(data.meta.run_id, f))}>{f}</DropdownMenuItem>
         ))}
-        <DropdownMenuItem asChild><a href={api.memoryUrl} download>memoire.csv</a></DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => window.location.assign(api.memoryUrl)}>memoire.csv</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
