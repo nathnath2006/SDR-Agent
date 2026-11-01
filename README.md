@@ -1,110 +1,97 @@
-# tamtam-agent
+# SDR Agent
 
-Agent qui transforme l'export Tamtam (prospects + événements) en **Top 20 des comptes à appeler, et pourquoi maintenant**, pour l'équipe sales de Mirakl. Relançable à chaque nouvel export au même format.
+Outil de priorisation de prospects. À partir d'un export Tamtam (prospects et événements), il produit la liste des 20 comptes à contacter en priorité pour Mirakl, avec la raison de chaque choix. Il peut être relancé à chaque nouvel export au même format.
 
-## Lancer
+## Installation
 
-Première installation (Python ≥ 3.11, Node ≥ 20) :
+Prérequis : Python 3.11 ou plus, Node 20 ou plus.
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e ".[api,anthropic,gemini,dev]"
 cd web && npm install && npm run build && cd ..
+.venv/bin/tamtam-agent serve   # http://localhost:8000
 ```
-
-Puis :
-
-```bash
-.venv/bin/tamtam-agent serve        # http://localhost:8000
-```
-
-L'export Tamtam du cas n'est pas versionné (données du cas). Dépose-le via l'onglet Import, ou dans `data/mirakl_case_data.xlsx` pour la ligne de commande et les tests.
 
 Avec Docker :
 
 ```bash
 docker build -t tamtam-agent .
-docker run -p 8000:8000 --env-file .env -v "$PWD/data:/app/data" -v "$PWD/outputs:/app/outputs" tamtam-agent
+docker run -p 8000:8000 -v "$PWD/data:/app/data" -v "$PWD/outputs:/app/outputs" tamtam-agent
 ```
 
-## Le parcours
+Les volumes `data` et `outputs` conservent les imports et les analyses entre deux lancements.
 
-1. **Paramètres** : ta clé API (Gemini ou Anthropic) et le modèle, mode jour / nuit, thème. **Chacun apporte sa clé** : elle reste dans son navigateur et n'est envoyée qu'avec ses analyses ; le serveur ne la stocke pas.
-2. **Import** : dépose l'export. Contrôle les feuilles, les chiffres (événements par type et détail, période, régions, tailles, secteurs), les pays suspects et ce qui a été ignoré ; **valide les doublons et groupes** (fusionner ou garder séparés).
-3. **Analyse** : lance l'agent sur l'import validé. Il sort le Top 20 ; un clic sur un compte ouvre sa fiche (pourquoi maintenant, angles d'approche, points à vérifier, signaux, fit).
-4. **Historique** : chaque analyse, la composition de son Top 20 et les comptes entrés ou sortis depuis la précédente.
-5. **Documentation** : les règles expliquées simplement.
+Les données du cas ne sont pas incluses dans le dépôt. Le fichier Excel s'importe depuis l'interface, ou se place dans `data/mirakl_case_data.xlsx` pour la ligne de commande et les tests.
 
-Sans clé LLM, tout est calculé (statuts, paliers, Top 20) mais aucun texte n'est rédigé.
+## Utilisation
 
-En ligne de commande, sans interface : `.venv/bin/tamtam-agent run --data export.xlsx` (tous les regroupements fusionnés ; clé lue dans `.env`, voir `.env.example`).
+1. **Paramètres** : saisir une clé API Gemini ou Anthropic. La clé est conservée dans le navigateur et n'est pas stockée sur le serveur.
+2. **Import** : charger l'export, vérifier les statistiques, puis valider les doublons et les groupes proposés.
+3. **Analyse** : lancer l'analyse sur un import validé. Chaque compte du Top 20 ouvre une fiche détaillée.
+4. **Historique** : consulter les analyses précédentes et les changements d'une analyse à l'autre.
+5. **Documentation** : description des règles appliquées.
 
-## Les règles en bref
+Sans clé API, les statuts, les paliers et le Top 20 sont calculés, mais aucun texte n'est rédigé.
 
-- **Statut** (fit) : qualifié / à creuser / disqualifié, d'après secteur, zone et taille. La **bande de taille déclarée fait foi** ; LinkedIn ne fait que confirmer.
-- **Palier** (timing) : A = signal d'intention marketplace de moins de 90 jours renforcé ; B = signal de moins de 90 jours seul, ou de moins de 180 jours renforcé ; C = contexte favorable sans intention, ou signal ancien ; D = rien.
-- **Top 20** : paliers A, puis B, **complétés par les meilleurs C** (signal le plus récent d'abord), jamais un disqualifié. Les C sont marqués « à qualifier ».
-- **Les règles décident seules** : même export, même Top 20. Le LLM traduit, rédige les raisons et fiches (chaque affirmation sourcée) et vérifie le web.
+Ligne de commande : `.venv/bin/tamtam-agent run --data export.xlsx` (clé lue dans `.env`, voir `.env.example`).
 
-Seuils et listes : `src/tamtam_agent/config.py`. Décisions détaillées : note `Grill - Détection d'opportunité` (vault Obsidian).
+## Règles
+
+- **Statut** : qualifié, à creuser ou disqualifié, selon le secteur, la zone et la taille déclarée.
+- **Palier** : A, B, C ou D, selon la présence d'un signal d'intention, son ancienneté (moins de 90 ou de 180 jours) et l'existence de signaux qui le renforcent.
+- **Top 20** : paliers A, puis B, complétés par les meilleurs comptes C (marqués « à qualifier »). Aucun compte disqualifié.
+
+Les règles déterminent seules le classement. Le modèle de langage sert uniquement à traduire les événements, rédiger les explications et vérifier certaines informations sur le web. Les seuils sont définis dans `src/tamtam_agent/config.py`.
 
 ## Structure
 
 ```
 src/tamtam_agent/
-  config.py     seuils et règles (fenêtres 90 / 180 j, taille, secteurs, zones)
-  load.py       lecture de l'Excel (ignore les colonnes et tableaux ajoutés à la main)
-  importer.py   import : aperçu des feuilles, statistiques, regroupements proposés
-  clean.py      doublons, groupes, pays suspects
-  icp.py        statut
-  signals.py    rôle de chaque événement (règles) ; traduction par le LLM
-  tiers.py      palier A / B / C / D
-  agent.py      enchaîne les étapes, construit le Top 20
-  enrich.py     textes rédigés par le LLM : raisons, fiches, vérification web
-  memory.py     comparaison d'une analyse à l'autre
-  outputs.py    fichiers de sortie
-  settings.py   clé et modèle LLM (.env)
-  llm/          Gemini et Anthropic derrière une même interface (cache .cache/llm/)
-  api.py, cli.py
-web/src/        front React + TypeScript (shadcn/ui, Tailwind, Recharts)
-  pages/        Import, Analyse, Historique, Documentation, Paramètres
-tests/          règles, cas de référence du handoff, import, API
+  config.py       seuils et listes (fenêtres de 90 et 180 jours, taille, secteurs, zones)
+  load.py         lecture du fichier Excel
+  importer.py     import : aperçu des feuilles, statistiques, validation
+  clean.py        doublons, groupes, pays incohérents
+  icp.py          statut (secteur, zone, taille)
+  signals.py      rôle de chaque événement
+  tiers.py        palier A, B, C ou D
+  agent.py        enchaînement des étapes et construction du Top 20
+  enrich.py       textes rédigés par le modèle et vérification web
+  memory.py       comparaison entre analyses
+  outputs.py      écriture des fichiers de sortie
+  settings.py     clé et modèle pour la ligne de commande (.env)
+  llm/            clients Gemini et Anthropic
+  api.py          API FastAPI et service de l'interface
+  cli.py          commandes run et serve
+web/src/
+  pages/          Import, Analyse, Historique, Documentation, Paramètres
+  components/     tableaux, fiches et blocs d'interface
+  lib/            navigation, apparence, clé API du navigateur
+tests/            règles, cas de référence, import, API
+Dockerfile        image de l'application (API et interface)
 
-data/imports/<id>/          fichier importé, inspection, validation du SDR
-outputs/runs/<id>/          une analyse : top20.md, tam_priorise.xlsx/.csv, explications.jsonl, meta.json
-outputs/memoire.csv         une ligne par entreprise, comparée d'une analyse à l'autre
+data/imports/<id>/    fichier importé, inspection, validation
+outputs/runs/<id>/    une analyse : top20.md, tam_priorise.xlsx et .csv, explications.jsonl, meta.json
+outputs/memoire.csv   suivi des comptes d'une analyse à l'autre
 ```
 
-## Déploiement Cloud Run
+## Déploiement
 
-L'image Docker tourne telle quelle sur Google Cloud Run. Configuration utilisée :
-
-| Élément | Réglage |
-|---|---|
-| Accès | `APP_PASSWORD` (Secret Manager) : écran de connexion, cookie de session ; toute l'API est fermée sans lui |
-| Données | bucket Cloud Storage monté sur `/mnt/store`, `TAMTAM_STORE=/mnt/store` (imports, analyses, historique) |
-| Instances | une seule (`--max-instances 1`), éteinte au repos (`--min-instances 0`), CPU gardé pendant l'analyse (`--no-cpu-throttling`) |
-| Clé LLM | aucune côté serveur : chaque utilisateur apporte la sienne |
+L'application est conteneurisée (`Dockerfile`) et peut être déployée sur Google Cloud Run :
 
 ```bash
-PROJECT=mon-projet; BUCKET=$PROJECT-data
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com \
-  secretmanager.googleapis.com storage.googleapis.com --project $PROJECT
-gcloud storage buckets create gs://$BUCKET --project $PROJECT --location europe-west1 \
-  --uniform-bucket-level-access --public-access-prevention
-printf 'mot-de-passe' | gcloud secrets create app-password --project $PROJECT --data-file=-
-# Donner au compte de service de Cloud Run : secretmanager.secretAccessor (secret),
-# storage.objectAdmin (bucket), run.builder (projet).
-gcloud run deploy sdr-agent --source . --project $PROJECT --region europe-west1 \
-  --allow-unauthenticated --execution-environment gen2 \
+gcloud run deploy sdr-agent --source . --region europe-west1 --allow-unauthenticated \
   --min-instances 0 --max-instances 1 --no-cpu-throttling --memory 1Gi --timeout 3600 \
   --set-secrets APP_PASSWORD=app-password:latest --set-env-vars TAMTAM_STORE=/mnt/store \
-  --add-volume name=store,type=cloud-storage,bucket=$BUCKET --add-volume-mount volume=store,mount-path=/mnt/store
+  --add-volume name=store,type=cloud-storage,bucket=BUCKET \
+  --add-volume-mount volume=store,mount-path=/mnt/store
 ```
 
-`.gcloudignore` garde `.env`, `data/` et `outputs/` hors du build. Pour changer le mot de passe : ajouter une version au secret `app-password`, puis `gcloud run services update sdr-agent`.
+- `APP_PASSWORD` (Secret Manager) protège l'accès à l'application.
+- `TAMTAM_STORE` pointe vers un bucket Cloud Storage qui conserve les imports et les analyses.
+- Aucune clé API n'est stockée côté serveur.
 
 ## Développement
 
-- Front avec rechargement à chaud : `tamtam-agent serve` dans un terminal, `cd web && npm run dev` dans un autre (http://localhost:5173).
+- Interface avec rechargement à chaud : `tamtam-agent serve`, puis `cd web && npm run dev` (http://localhost:5173).
 - Tests : `.venv/bin/pytest`.
