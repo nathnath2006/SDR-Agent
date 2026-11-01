@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Download, Play } from "lucide-react";
-import { api, download } from "@/api";
+import { api } from "@/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -145,24 +145,16 @@ function Launcher({ onDone }: { onDone: (run: string) => void }) {
 }
 
 function Exports({ data }: { data: RunData }) {
-  const [error, setError] = useState("");
-  const get = (path: string, name: string) => {
-    setError("");
-    download(path, name).catch((e) => setError(`${name} : ${(e as Error).message}`));
-  };
   return (
-    <div className="flex items-center gap-3">
-      {error && <span className="text-sm text-destructive">{error}</span>}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild><Button variant="outline"><Download />Exporter</Button></DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {data.files.map((f) => (
-            <DropdownMenuItem key={f} onSelect={() => get(api.fileUrl(data.meta.run_id, f), f)}>{f}</DropdownMenuItem>
-          ))}
-          <DropdownMenuItem onSelect={() => get(api.memoryUrl, "memoire.csv")}>memoire.csv</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild><Button variant="outline"><Download />Exporter</Button></DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {data.files.map((f) => (
+          <DropdownMenuItem key={f} asChild><a href={api.fileUrl(data.meta.run_id, f)} download>{f}</a></DropdownMenuItem>
+        ))}
+        <DropdownMenuItem asChild><a href={api.memoryUrl} download>memoire.csv</a></DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
