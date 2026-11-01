@@ -1,5 +1,5 @@
 import type { LlmChoice } from "./lib/app";
-import type { Config, ImportDetail, ImportSummary, Job, RunData, RunMeta } from "./types";
+import type { Config, ExportList, ImportDetail, ImportSummary, Job, RunData, RunMeta } from "./types";
 
 export const UNAUTHORIZED = "tamtam-unauthorized";
 
@@ -37,6 +37,7 @@ export const api = {
   runs: () => request<RunMeta[]>("/api/runs"),
   run: (id: string) => request<RunData>(`/api/runs/${id}`),
   testLlm: (llm: LlmChoice) => post<{ ok: boolean; provider: string; model: string }>("/api/llm/test", llm),
-  fileUrl: (run: string, name: string) => `/api/runs/${run}/files/${name}`,
+  exportUrl: (run: string, liste: ExportList | "complet", format: "xlsx" | "csv") =>
+    `/api/runs/${run}/export?liste=${liste}&format=${format}`,
   memoryUrl: "/api/memory",
 };

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 
@@ -25,8 +26,8 @@ def write_all(result: RunResult, out_dir: Path) -> dict[str, Path]:
         "memoire": out_dir / "memoire.csv",
     }
     tam = tam_table(result.accounts)
-    tam.to_csv(paths["tam_csv"], index=False)
-    _write_xlsx(tam, result, paths["tam_xlsx"])
+    paths["tam_csv"].write_bytes(csv_bytes(tam))
+    paths["tam_xlsx"].write_bytes(xlsx_bytes(export_sheets(tam, "complet", result.limits)))
     paths["top20"].write_text(top20_markdown(result))
     with paths["explications"].open("w") as f:
         for a in result.accounts:
@@ -49,8 +50,11 @@ def write_all(result: RunResult, out_dir: Path) -> dict[str, Path]:
 
 
 # --- TAM ---------------------------------------------------------------------
+INT_COLUMNS = ["rang", "rang top 20", "profils LinkedIn", "groupe id"]
+
+
 def tam_table(accounts: list[dict]) -> pd.DataFrame:
-    return pd.DataFrame([{
+    return _int_columns(pd.DataFrame([{
         "rang": i,
         "compte": a["nom"],
         "statut": a["statut"],
@@ -59,7 +63,7 @@ def tam_table(accounts: list[dict]) -> pd.DataFrame:
         "règle du palier": a["regle_palier"],
         "motif": a["motif"],
         "liste": a["liste"],
-        "rang top 20": a["rang_top"] or "",
+        "rang top 20": a["rang_top"],
         "à qualifier avant d'appeler": "oui" if a["a_qualifier"] else "",
         "dernier déclencheur": a["dernier_declencheur"],
         "pays": a["pays"],
@@ -72,25 +76,63 @@ def tam_table(accounts: list[dict]) -> pd.DataFrame:
         "site": a["site"],
         "entités rattachées": " | ".join(a["entites"]) if len(a["entites"]) > 1 else "",
         "groupe id": a["groupe_id"],
-    } for i, a in enumerate(accounts, start=1)])
+    } for i, a in enumerate(accounts, start=1)]))
 
 
-def _write_xlsx(tam: pd.DataFrame, result: RunResult, path: Path) -> None:
-    sheets = {
-        "TAM priorisé": tam,
-        "Top 20": tam[tam["rang top 20"] != ""],
-        "Hors ICP à surveiller": tam[tam["liste"] == config.LIST_WATCH],
-        "Clients à développer": tam[tam["liste"] == config.LIST_CLIENTS],
-        "Limites": pd.DataFrame({"limite": _limit_lines(result)}),
+def read_tam(xlsx: Path) -> pd.DataFrame:
+    """Relit le TAM d'une analyse depuis son Excel (source des exports)."""
+    return _int_columns(pd.read_excel(xlsx, sheet_name=EXPORT_LISTS["tous"]))
+
+
+def _int_columns(df: pd.DataFrame) -> pd.DataFrame:
+    # Entiers avec cases vides : sinon pandas écrit « 3.0 ».
+    for col in INT_COLUMNS:
+        df[col] = pd.to_numeric(df[col], errors="coerce").astype("Int64")
+    return df
+
+
+# Listes exportables : clé -> (nom de l'onglet, filtre sur le TAM). « complet » les réunit toutes.
+EXPORT_LISTS = {
+    "top": "Top 20",
+    "tous": "TAM priorisé",
+    "surveiller": "Hors cible à surveiller",
+    "clients": "Clients Mirakl",
+}
+
+
+def export_sheets(tam: pd.DataFrame, liste: str, limits: dict | None = None) -> dict[str, pd.DataFrame]:
+    """Onglets d'un export : une liste, ou toutes (« complet », avec les limites des données)."""
+    tables = {
+        "top": tam[tam["rang top 20"].notna()].sort_values("rang top 20"),
+        "tous": tam,
+        "surveiller": tam[tam["liste"] == config.LIST_WATCH],
+        "clients": tam[tam["liste"] == config.LIST_CLIENTS],
     }
-    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+    if liste != "complet":
+        return {EXPORT_LISTS[liste]: tables[liste]}
+    sheets = {EXPORT_LISTS[k]: df for k, df in tables.items()}
+    if limits:
+        sheets["Limites"] = pd.DataFrame({"limite": _limit_lines(limits)})
+    return sheets
+
+
+def xlsx_bytes(sheets: dict[str, pd.DataFrame]) -> bytes:
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
         for name, df in sheets.items():
             df.to_excel(writer, sheet_name=name, index=False)
             ws = writer.sheets[name]
             ws.freeze_panes = "B2"
+            ws.auto_filter.ref = ws.dimensions
             for col_cells in ws.columns:
                 width = max(len(str(c.value or "")) for c in col_cells[:60])
                 ws.column_dimensions[col_cells[0].column_letter].width = min(max(10, width + 2), 70)
+    return buffer.getvalue()
+
+
+def csv_bytes(df: pd.DataFrame) -> bytes:
+    """CSV lisible par Excel en français : séparateur « ; » et BOM UTF-8 (sinon tout tient dans la colonne A)."""
+    return df.to_csv(index=False, sep=";").encode("utf-8-sig")
 
 
 # --- Top 20 pour les SDR -------------------------------------------------------
@@ -247,8 +289,7 @@ def explanation(a: dict) -> dict:
 
 
 # --- Limites ------------------------------------------------------------------
-def _limit_lines(result: RunResult) -> list[str]:
-    lim = result.limits
+def _limit_lines(lim: dict) -> list[str]:
     lines = [f"Fraîcheur : extraction du {lim['fraicheur']['extraction']}, "
              f"{lim['fraicheur']['jours']} jours avant le traitement.", lim["evenements"], lim["groupes"]]
     lines += [f"CRM : {x}" for x in lim["crm"]]

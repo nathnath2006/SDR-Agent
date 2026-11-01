@@ -189,6 +189,7 @@
     font-size: 0.75rem;
     font-weight: 500;
     line-height: 1.25rem;
-    white-space: nowrap;
+    max-width: 100%;
+    overflow-wrap: anywhere;
   }
 }

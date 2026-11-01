@@ -1,9 +1,11 @@
 """API : import, validation, analyse hors ligne, historique, paramètres."""
 
+import io
 import shutil
 import time
 from pathlib import Path
 
+import pandas as pd
 import pytest
 from fastapi.testclient import TestClient
 
@@ -53,7 +55,15 @@ def test_import_validate_analyze_history(client):
     assert job["state"] == "done", job
     run = client.get(f"/api/runs/{job['run']}").json()
     assert run["meta"]["top"] == 20 and run["meta"]["source"] == "export.xlsx"
-    assert client.get(f"/api/runs/{job['run']}/files/top20.md").status_code == 200
+    export = f"/api/runs/{job['run']}/export"
+    full = client.get(export)
+    assert full.status_code == 200 and full.headers["content-disposition"].endswith('.xlsx"')
+    sheets = pd.read_excel(io.BytesIO(full.content), sheet_name=None)
+    assert list(sheets) == ["Top 20", "TAM priorisé", "Hors cible à surveiller", "Clients Mirakl", "Limites"]
+    assert len(sheets["Top 20"]) == 20 and sheets["Top 20"]["rang top 20"].tolist() == list(range(1, 21))
+    top_csv = client.get(export, params={"liste": "top", "format": "csv"})
+    assert top_csv.content.startswith("\ufeff".encode()) and top_csv.content.decode("utf-8-sig").startswith("rang;compte;")
+    assert client.get(export, params={"format": "csv"}).status_code == 400
     history = client.get("/api/runs").json()
     assert [h["run_id"] for h in history] == [job["run"]]
 

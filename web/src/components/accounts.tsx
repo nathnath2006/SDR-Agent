@@ -144,8 +144,8 @@ export function AccountSheet({ account: a, explained, onClose }: { account: Acco
           </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 space-y-6 overflow-y-auto p-4">
-          <dl className="grid grid-cols-[88px_1fr] gap-x-4 gap-y-1.5 text-sm">
+        <div className="flex-1 space-y-6 overflow-x-hidden overflow-y-auto p-4 [overflow-wrap:anywhere]">
+          <dl className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
             <dt className="text-muted-foreground">Palier</dt>
             <dd>{a.regle_palier}{a.a_qualifier && " — complète le Top 20, à qualifier avant d'appeler"}</dd>
             <dt className="text-muted-foreground">Statut</dt>
@@ -227,7 +227,7 @@ export function AccountSheet({ account: a, explained, onClose }: { account: Acco
             {signals.length === 0 ? <p className="text-sm text-muted-foreground">Aucun signal exploitable.</p> : (
               <ul className="divide-y text-sm">
                 {signals.map((s) => (
-                  <li key={s.event_id} id={`ev-${s.event_id}`} className={cn("grid grid-cols-[92px_1fr] gap-3 rounded-md py-2", focus === s.event_id && "bg-primary/10")}>
+                  <li key={s.event_id} id={`ev-${s.event_id}`} className={cn("grid grid-cols-[92px_minmax(0,1fr)] gap-3 rounded-md py-2", focus === s.event_id && "bg-primary/10")}>
                     <div className="text-xs text-muted-foreground">{frDate(s.date)}<br />{s.age_jours} j · {s.event_id}</div>
                     <div>
                       <span className={cn("why mb-1", s.role === "déclencheur" && "text-why-blue", s.role === "amplificateur" && "text-why-violet",
@@ -244,7 +244,7 @@ export function AccountSheet({ account: a, explained, onClose }: { account: Acco
           <Section title="Fit ICP">
             <ul className="divide-y text-sm">
               {(Object.keys(FIT_LABEL) as (keyof typeof FIT_LABEL)[]).map((k) => (
-                <li key={k} className="grid grid-cols-[88px_80px_1fr] gap-2 py-2">
+                <li key={k} className="grid grid-cols-[88px_80px_minmax(0,1fr)] gap-2 py-2">
                   <span className="text-muted-foreground">{FIT_LABEL[k]}</span>
                   <span className={cn("font-medium", a.fit[k].niveau === "dans" && "text-tier-a", a.fit[k].niveau === "incertain" && "text-tier-c", a.fit[k].niveau === "hors" && "text-destructive")}>
                     {a.fit[k].niveau}

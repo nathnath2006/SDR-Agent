@@ -4,7 +4,7 @@ import { api } from "@/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AccountSheet, AccountTable, sortAccounts, type Sort, type SortKey } from "@/components/accounts";
 import { EmptyState, PageHeader, StatCard } from "@/components/blocks";
 import { frDate, go, matches, runDate, useLlm } from "@/lib/app";
-import type { Account, ImportSummary, Job, RunData, Status, Tier } from "@/types";
+import type { Account, ExportList, ImportSummary, Job, RunData, Status, Tier } from "@/types";
 
 type View = "top" | "tous" | "surveiller" | "clients";
 
@@ -144,15 +144,34 @@ function Launcher({ onDone }: { onDone: (run: string) => void }) {
   );
 }
 
+const EXPORTS: { liste: ExportList; label: string }[] = [
+  { liste: "top", label: "Top 20" },
+  { liste: "tous", label: "Tous les comptes" },
+  { liste: "surveiller", label: "Hors cible à surveiller" },
+  { liste: "clients", label: "Clients Mirakl" },
+];
+
 function Exports({ data }: { data: RunData }) {
+  const url = (liste: ExportList | "complet", format: "xlsx" | "csv") => api.exportUrl(data.meta.run_id, liste, format);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild><Button variant="outline"><Download />Exporter</Button></DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {data.files.map((f) => (
-          <DropdownMenuItem key={f} asChild><a href={api.fileUrl(data.meta.run_id, f)} download>{f}</a></DropdownMenuItem>
+      <DropdownMenuContent align="end" className="w-72">
+        <DropdownMenuItem asChild>
+          <a href={url("complet", "xlsx")} download className="flex-col items-start gap-0">
+            <span className="font-medium">Tout en un fichier Excel</span>
+            <span className="text-xs text-muted-foreground">un onglet par liste, plus les limites des données</span>
+          </a>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Une seule liste</DropdownMenuLabel>
+        {EXPORTS.map((e) => (
+          <div key={e.liste} className="flex items-center gap-1 px-1.5 py-0.5 text-sm">
+            <span className="flex-1">{e.label}</span>
+            <DropdownMenuItem asChild className="px-2 text-xs"><a href={url(e.liste, "xlsx")} download>Excel</a></DropdownMenuItem>
+            <DropdownMenuItem asChild className="px-2 text-xs"><a href={url(e.liste, "csv")} download>CSV</a></DropdownMenuItem>
+          </div>
         ))}
-        <DropdownMenuItem asChild><a href={api.memoryUrl} download>memoire.csv</a></DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

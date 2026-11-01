@@ -46,14 +46,7 @@ CACHE_DIR = STORE / ".cache" / "llm"
 WEB_DIST = ROOT / "web" / "dist"
 SESSION_COOKIE = "tamtam_session"
 ID_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}_\d{6}$")
-DOWNLOADS = {
-    "top20.md": "text/markdown",
-    "tam_priorise.xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    "tam_priorise.csv": "text/csv",
-    "explications.jsonl": "application/jsonl",
-    "limites_des_donnees.md": "text/markdown",
-    "llm_log.jsonl": "application/jsonl",
-}
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 app = FastAPI(title="tamtam-agent")
 
@@ -272,16 +265,25 @@ def get_run(run_id: str) -> dict:
     for rank, a in enumerate(accounts, start=1):   # le fichier est déjà trié comme le TAM
         a["rang"] = rank
     meta = json.loads((run_dir / "meta.json").read_text())
-    files = [name for name in DOWNLOADS if (run_dir / name).exists()]
-    return {"meta": meta, "accounts": accounts, "files": files}
+    return {"meta": meta, "accounts": accounts}
 
 
-@app.get("/api/runs/{run_id}/files/{name}")
-def download(run_id: str, name: str) -> FileResponse:
-    path = _run_dir(run_id) / name
-    if name not in DOWNLOADS or not path.exists():
-        raise HTTPException(404, "fichier inconnu")
-    return FileResponse(path, media_type=DOWNLOADS[name], filename=name)
+@app.get("/api/runs/{run_id}/export")
+def export(run_id: str, liste: Literal["complet", "top", "tous", "surveiller", "clients"] = "complet",
+           format: Literal["xlsx", "csv"] = "xlsx") -> Response:
+    """Une liste de l'analyse (ou toutes, un onglet chacune) en Excel ou en CSV."""
+    run_dir = _run_dir(run_id)
+    if format == "csv" and liste == "complet":
+        raise HTTPException(400, "le CSV ne contient qu'une liste : choisir top, tous, surveiller ou clients")
+    tam = outputs.read_tam(run_dir / "tam_priorise.xlsx")
+    limits = json.loads((run_dir / "meta.json").read_text()).get("limites")
+    sheets = outputs.export_sheets(tam, liste, limits)
+    if format == "xlsx":
+        body, media = outputs.xlsx_bytes(sheets), XLSX
+    else:
+        body, media = outputs.csv_bytes(next(iter(sheets.values()))), "text/csv; charset=utf-8"
+    name = f"{'tam_mirakl' if liste == 'complet' else liste}_{run_id}.{format}"
+    return Response(body, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}"'})
 
 
 @app.get("/api/memory")

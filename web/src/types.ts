@@ -105,8 +105,10 @@ export interface RunMeta {
 export interface RunData {
   meta: RunMeta;
   accounts: Account[];
-  files: string[];
 }
+
+/** Listes exportables d'une analyse (voir outputs.EXPORT_LISTS). */
+export type ExportList = "top" | "tous" | "surveiller" | "clients";
 
 export interface Count {
   label: string;
