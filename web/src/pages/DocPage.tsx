@@ -93,6 +93,12 @@ export function DocPage({ rules }: { rules: Config["rules"] }) {
           <p className="text-muted-foreground">Chaque affirmation cite sa source : E = événement, P = profil Tamtam (photo de 2024), W = web. Un angle sans source est retiré. Sans clé, tout est calculé, rien n'est rédigé.</p>
         </Block>
 
+        <Block title="Évolutions entre deux analyses (option)">
+          <p>Si l'option est cochée au lancement, chaque compte est comparé à la dernière analyse d'un export plus ancien. Seuls les comptes qui ont des signaux nouveaux sont soumis au LLM, qui juge s'ils montrent un pas de plus vers une marketplace.</p>
+          <p>Une évolution <strong>nette</strong> compte comme un déclencheur, une évolution <strong>faible</strong> comme un amplificateur ; les paliers s'appliquent ensuite comme d'habitude. Un verdict qui ne cite aucun signal nouveau est ignoré.</p>
+          <p className="text-muted-foreground">Le palier dépend alors du jugement du LLM : sans l'option, les règles seules décident.</p>
+        </Block>
+
         <Block title="Limites à garder en tête">
           <ul className="list-disc space-y-1 pl-5">
             <li>Les signaux datent de l'export : plus il est ancien, plus il faut vérifier en début d'appel.</li>

@@ -42,6 +42,7 @@ def write_all(result: RunResult, out_dir: Path) -> dict[str, Path]:
         "statuts": {s: sum(a["statut"] == s for a in result.accounts)
                     for s in (config.STATUS_QUALIFIED, config.STATUS_DIG, config.STATUS_DISQUALIFIED)},
         "paliers_top": {t: sum(a["palier"] == t for a in result.top) for t in "ABC"},
+        "evolution": result.evolution,
         "limites": result.limits,
         "sortis": result.gone[["groupe_id", "compte", "palier"]].to_dict("records") if not result.gone.empty else [],
     }, ensure_ascii=False, indent=1, default=str))
@@ -73,6 +74,7 @@ def tam_table(accounts: list[dict]) -> pd.DataFrame:
         "confiance": a["confiance"],
         "évolution": a["evolution"],
         "évolution (détail)": a["evolution_detail"],
+        "évolution vers une marketplace": (a.get("evolution_mp") or {}).get("verdict", ""),
         "site": a["site"],
         "entités rattachées": " | ".join(a["entites"]) if len(a["entites"]) > 1 else "",
         "groupe id": a["groupe_id"],
@@ -285,7 +287,14 @@ def explanation(a: dict) -> dict:
         "verification_web": web or None, "argumentaire": pitch or None,
         "a_verifier": a["a_verifier"], "incertitudes": uncertain, "sources": sources,
         "a_qualifier": a["a_qualifier"], "dernier_signal": a["dernier_signal"],
+        "evolution_mp": _evolution_json(a.get("evolution_mp")),
     }
+
+
+def _evolution_json(v: dict | None) -> dict | None:
+    if not v:
+        return None
+    return {**v, "date": v["date"].date().isoformat() if v["date"] is not None else None}
 
 
 # --- Limites ------------------------------------------------------------------

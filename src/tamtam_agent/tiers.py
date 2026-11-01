@@ -16,7 +16,8 @@ from . import config
 
 TIER_ORDER = {"A": 0, "B": 1, "C": 2, "D": 3, "-": 4}
 NATURE_LABELS = {"recrutement": "recrutement", "ouverture_vendeurs": "ouverture aux vendeurs tiers",
-                 "dropship": "drop-ship", "acquisition": "acquisition"}
+                 "dropship": "drop-ship", "acquisition": "acquisition",
+                 "evolution": "évolution depuis l'analyse précédente"}
 
 
 @dataclass

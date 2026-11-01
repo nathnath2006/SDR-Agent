@@ -41,8 +41,9 @@ Ligne de commande : `.venv/bin/tamtam-agent run --data export.xlsx` (clé lue da
 - **Statut** : qualifié, à creuser ou disqualifié, selon le secteur, la zone et la taille déclarée.
 - **Palier** : A, B, C ou D, selon la présence d'un signal d'intention, son ancienneté (moins de 90 ou de 180 jours) et l'existence de signaux qui le renforcent.
 - **Top 20** : paliers A, puis B, complétés par les meilleurs comptes C (marqués « à qualifier »). Aucun compte disqualifié.
+- **Évolutions** (option au lancement) : chaque compte est comparé à la dernière analyse d'un export plus ancien. Le modèle juge si les signaux nouveaux montrent une évolution vers une marketplace : une évolution nette compte comme un déclencheur, une évolution faible comme un amplificateur.
 
-Les règles déterminent seules le classement. Le modèle de langage sert uniquement à traduire les événements, rédiger les explications et vérifier certaines informations sur le web. Les seuils sont définis dans `src/tamtam_agent/config.py`.
+Sans l'option, les règles déterminent seules le classement. Le modèle de langage sert alors uniquement à traduire les événements, rédiger les explications et vérifier certaines informations sur le web. Les seuils sont définis dans `src/tamtam_agent/config.py`.
 
 ## Structure
 
@@ -57,6 +58,7 @@ src/tamtam_agent/
   tiers.py        palier A, B, C ou D
   agent.py        enchaînement des étapes et construction du Top 20
   enrich.py       textes rédigés par le modèle et vérification web
+  evolution.py    option évolutions : comparaison avec l'analyse précédente
   memory.py       comparaison entre analyses
   outputs.py      écriture des fichiers de sortie
   settings.py     clé et modèle pour la ligne de commande (.env)

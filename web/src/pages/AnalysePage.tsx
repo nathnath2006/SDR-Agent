@@ -56,6 +56,7 @@ function Launcher({ onDone }: { onDone: (run: string) => void }) {
   const [imports, setImports] = useState<ImportSummary[]>([]);
   const [importId, setImportId] = useState<string>("");
   const [web, setWeb] = useState(true);
+  const [evolution, setEvolution] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState("");
   const running = job?.state === "running";
@@ -84,7 +85,7 @@ function Launcher({ onDone }: { onDone: (run: string) => void }) {
   const start = async () => {
     setError("");
     try {
-      setJob(await api.analyze(importId, Boolean(llm) && web, llm));
+      setJob(await api.analyze(importId, Boolean(llm) && web, Boolean(llm) && evolution, llm));
     } catch (e) {
       setError((e as Error).message);
     }
@@ -126,6 +127,10 @@ function Launcher({ onDone }: { onDone: (run: string) => void }) {
           <div className="flex items-center gap-2 pb-2">
             <Switch id="web" checked={Boolean(provider) && web} disabled={!provider || running} onCheckedChange={setWeb} />
             <Label htmlFor="web" className="font-normal">Vérifier sur le web si les 20 comptes ont déjà une marketplace</Label>
+          </div>
+          <div className="flex items-center gap-2 pb-2">
+            <Switch id="evolution" checked={Boolean(provider) && evolution} disabled={!provider || running} onCheckedChange={setEvolution} />
+            <Label htmlFor="evolution" className="font-normal">Inclure les évolutions depuis l'analyse précédente (une évolution nette compte comme déclencheur)</Label>
           </div>
           <Button onClick={start} disabled={running || !importId} className="bg-brand-yellow text-[#1c1c1c] hover:bg-brand-yellow/85 ml-auto"><Play />{running ? "Analyse en cours…" : "Lancer l'analyse"}</Button>
         </div>
@@ -206,6 +211,13 @@ function Results({ data, accountId }: { data: RunData; accountId?: string }) {
         <span>{meta.source}</span>
         <span>Signaux arrêtés au {frDate(meta.extraction)}</span>
         <span>{meta.explique ? `Textes : ${meta.llm}` : "Sans LLM : aucun texte rédigé"}</span>
+        {meta.evolution && (
+          <span>
+            {meta.evolution.base
+              ? `Évolutions depuis l'analyse du ${frDate(meta.evolution.extraction_base ?? "")} : ${meta.evolution.evalues} comptes évalués, ${meta.evolution.nette} nettes, ${meta.evolution.faible} faibles`
+              : `Évolutions ${meta.evolution.message}`}
+          </span>
+        )}
       </div>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Top 20" value={<span>{p.A} A · {p.B} B · {p.C} C</span>} hint={p.C ? `${p.C} comptes en palier C complètent la liste : à qualifier avant d'appeler.` : "Tous ont un signal d'intention récent."} />

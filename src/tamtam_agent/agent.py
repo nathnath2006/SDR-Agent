@@ -2,6 +2,8 @@
 
 Les règles décident (statut, palier, ordre) ; le LLM, s'il est configuré, rédige
 les textes et vérifie le web. Même export, mêmes décisions : même Top 20.
+Option « évolutions » : le LLM juge l'évolution de chaque compte depuis l'analyse
+précédente ; une évolution nette devient un déclencheur (voir evolution.py).
 """
 
 from __future__ import annotations
@@ -13,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import config, enrich, icp, memory, signals
+from . import config, enrich, evolution as evolutions, icp, memory, signals
 from .clean import attach_events, build_groups, registered_domain
 from .llm import LLMError, get_llm
 from .load import load_case_data
@@ -36,6 +38,7 @@ class RunResult:
     memory: pd.DataFrame = field(repr=False, default_factory=pd.DataFrame)
     explained: bool = False   # textes rédigés par un LLM ?
     source: str = ""
+    evolution: dict | None = None   # option évolutions : base de comparaison et décompte
 
 
 def new_run_id() -> str:
@@ -45,7 +48,7 @@ def new_run_id() -> str:
 def run(data_path: Path, out_dir: Path, provider: str = "auto", web: bool = True,
         top_n: int = config.TOP_N, cache_dir: Path | None = None, run_date: date | None = None,
         api_key: str | None = None, group_decisions: dict[str, bool] | None = None,
-        run_id: str | None = None, model: str | None = None) -> RunResult:
+        run_id: str | None = None, model: str | None = None, evolution: bool = False) -> RunResult:
     run_date = run_date or date.today()
     run_id = run_id or new_run_id()
     data = load_case_data(data_path)
@@ -69,6 +72,12 @@ def run(data_path: Path, out_dir: Path, provider: str = "auto", web: bool = True
         log.warning("Traduction des événements impossible (%s) : textes d'origine", exc)
         events = signals.classify_events(events, None)
 
+    verdicts, evolution_info = {}, None
+    if evolution:
+        verdicts, evolution_info = _evolutions(groups, events, extraction, out_dir / "runs", llm)
+        if verdicts:
+            events = pd.concat([events, evolutions.as_events(verdicts)], ignore_index=True)
+
     events_by_group = dict(tuple(events.groupby("GroupId")))
     empty = events.iloc[0:0]
     accounts = []
@@ -76,6 +85,7 @@ def run(data_path: Path, out_dir: Path, provider: str = "auto", web: bool = True
         fit = icp.evaluate(row)
         tier = assign_tier(events_by_group.get(row["GroupId"], empty), extraction)
         accounts.append(_account(row, fit, tier))
+        accounts[-1]["evolution_mp"] = verdicts.get(int(row["GroupId"]))
     accounts.sort(key=_sort_key)
 
     # Top 20 : paliers A puis B, complété par les meilleurs palier C ; jamais un disqualifié.
@@ -117,7 +127,21 @@ def run(data_path: Path, out_dir: Path, provider: str = "auto", web: bool = True
 
     limits = data_limits(data, groups, events, accounts, extraction, run_date)
     return RunResult(run_id, accounts, top, extraction, run_date, llm_label, limits, gone, new_memory,
-                     llm is not None, Path(data_path).name)
+                     llm is not None, Path(data_path).name, evolution_info)
+
+
+def _evolutions(groups, events, extraction, runs_dir: Path, llm) -> tuple[dict[int, dict], dict]:
+    if llm is None:
+        log.warning("Évolutions demandées sans clé LLM : non évaluées")
+        return {}, {"base": None, "message": "non évaluées : pas de clé LLM"}
+    base = evolutions.previous_run(runs_dir, extraction)
+    if base is None:
+        log.info("Évolutions : aucune analyse d'un export plus ancien, rien à comparer")
+        return {}, {"base": None, "message": "aucune analyse d'un export plus ancien"}
+    verdicts = evolutions.assess(groups, events, base, llm)
+    counts = {v: sum(x["verdict"] == v for x in verdicts.values()) for v in evolutions.VERDICTS}
+    log.info("Évolutions : %d nettes, %d faibles", counts["nette"], counts["faible"])
+    return verdicts, {"base": base.run_id, "extraction_base": base.extraction, "evalues": len(verdicts), **counts}
 
 
 def _account(row: pd.Series, fit: icp.IcpResult, tier) -> dict:

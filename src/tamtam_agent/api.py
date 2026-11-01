@@ -164,6 +164,7 @@ class LlmChoice(BaseModel):
 
 class AnalyzeRequest(BaseModel):
     web: bool = True
+    evolution: bool = False   # comparer à la dernière analyse d'un export plus ancien
     llm: LlmChoice | None = None   # sans clé : décisions calculées, aucun texte rédigé
 
 
@@ -205,11 +206,11 @@ def analyze(import_id: str, req: AnalyzeRequest) -> dict:
         JOB.state, JOB.message, JOB.run, JOB.import_id = "running", "Analyse en cours", None, import_id
         JOB.logs.clear()
         JOB.started = datetime.now().isoformat(timespec="seconds")
-    threading.Thread(target=_execute, args=(folder, decisions, req.web, req.llm), daemon=True).start()
+    threading.Thread(target=_execute, args=(folder, decisions, req.web, req.evolution, req.llm), daemon=True).start()
     return JOB.as_dict()
 
 
-def _execute(folder: Path, decisions: dict[str, bool], web: bool, llm: LlmChoice | None) -> None:
+def _execute(folder: Path, decisions: dict[str, bool], web: bool, evolution: bool, llm: LlmChoice | None) -> None:
     logger = logging.getLogger("tamtam_agent")
     handler = _JobLogHandler()
     logger.addHandler(handler)
@@ -218,7 +219,8 @@ def _execute(folder: Path, decisions: dict[str, bool], web: bool, llm: LlmChoice
         meta = json.loads((folder / "meta.json").read_text())
         result = agent.run(folder / "source.xlsx", OUT_DIR, web=web, cache_dir=CACHE_DIR,
                            group_decisions=decisions, provider=llm.provider if llm else "none",
-                           api_key=llm.api_key if llm else None, model=llm.model if llm else None)
+                           api_key=llm.api_key if llm else None, model=llm.model if llm else None,
+                           evolution=evolution)
         result.source = meta["fichier"]
         outputs.write_all(result, OUT_DIR)
         (RUNS_DIR / result.run_id / "import.json").write_text(json.dumps({"import_id": folder.name, **meta}))

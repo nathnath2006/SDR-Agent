@@ -31,8 +31,8 @@ export const api = {
     request<ImportDetail>(`/api/imports?name=${encodeURIComponent(file.name)}`, { method: "POST", body: file }),
   validate: (id: string, decisions: Record<string, boolean>) =>
     post<ImportSummary>(`/api/imports/${id}/validate`, { decisions }),
-  analyze: (id: string, web: boolean, llm: LlmChoice | null) =>
-    post<Job>(`/api/imports/${id}/analyze`, { web, llm }),
+  analyze: (id: string, web: boolean, evolution: boolean, llm: LlmChoice | null) =>
+    post<Job>(`/api/imports/${id}/analyze`, { web, evolution, llm }),
   job: () => request<Job>("/api/job"),
   runs: () => request<RunMeta[]>("/api/runs"),
   run: (id: string) => request<RunData>(`/api/runs/${id}`),

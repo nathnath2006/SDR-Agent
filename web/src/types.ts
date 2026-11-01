@@ -72,6 +72,18 @@ export interface Account {
   argumentaire: Pitch | null;
   a_verifier: string[];
   incertitudes: string[];
+  evolution_mp: Evolution | null;
+}
+
+/** Évolution vers une marketplace depuis l'analyse précédente (option au lancement). */
+export interface Evolution {
+  verdict: "nette" | "faible" | "aucune";
+  explication: string;
+  sources: string[];
+  confiance: "haute" | "moyenne" | "basse";
+  base_run: string;
+  base_extraction: string;
+  date: string | null;
 }
 
 export interface Limits {
@@ -97,6 +109,7 @@ export interface RunMeta {
   top_ids: number[];
   statuts: Record<Status, number>;
   paliers_top: Record<"A" | "B" | "C", number>;
+  evolution?: { base: string | null; message?: string; extraction_base?: string; evalues?: number; nette?: number; faible?: number } | null;
   limites?: Limits;
   entres?: string[];
   sortis_top?: string[];

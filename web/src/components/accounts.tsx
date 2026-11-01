@@ -102,6 +102,7 @@ export function AccountTable({ accounts, sort, onSort, onOpen, topRank, explaine
 
 const WEB_STATE = { existante: "Une marketplace est déjà en place.", aucune: "Aucune marketplace trouvée.", inconnu: "Rien de concluant sur le web." };
 const FIT_LABEL = { secteur: "Secteur", geographie: "Zone", taille: "Taille" } as const;
+const EVOLUTION_LABEL = { nette: "évolution nette (déclencheur)", faible: "évolution faible (amplificateur)", aucune: "pas d'évolution vers une marketplace" };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -162,6 +163,20 @@ export function AccountSheet({ account: a, explained, onClose }: { account: Acco
               {a.raison || (explained ? a.regle_palier : "Pas de texte rédigé : l'analyse a tourné sans clé LLM. Ajoute une clé dans Paramètres puis relance.")}
             </p>
           </div>
+
+          {a.evolution_mp && (
+            <div className={cn("space-y-1 rounded-lg border p-3", a.evolution_mp.verdict === "nette" && "border-why-blue/40 bg-why-blue/5")}>
+              <p className="text-xs font-medium text-muted-foreground">
+                Évolution depuis l'analyse du {frDate(a.evolution_mp.base_extraction)} : <span className="text-foreground">{EVOLUTION_LABEL[a.evolution_mp.verdict]}</span>
+              </p>
+              <p className="text-sm leading-relaxed">
+                {a.evolution_mp.explication}{" "}
+                {a.evolution_mp.sources.map((s) => (
+                  <button key={s} onClick={() => cite(s)} className="ml-1 text-xs text-primary underline underline-offset-2">{s}</button>
+                ))}
+              </p>
+            </div>
+          )}
 
           {pitch && (
             <>
