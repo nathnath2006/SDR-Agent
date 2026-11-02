@@ -31,7 +31,7 @@ export function DocPage({ rules }: { rules: Config["rules"] }) {
           <li><strong>Import</strong> de l'export Tamtam (prospects et événements).</li>
           <li><strong>Doublons et groupes</strong> validés par le SDR : un groupe devient un seul compte, avec les signaux de ses filiales.</li>
           <li><strong>Statut</strong> : l'entreprise est-elle dans la cible de Mirakl ?</li>
-          <li><strong>Signaux</strong> : chaque événement reçoit un rôle (déclencheur, amplificateur, contexte, client Mirakl, bruit).</li>
+          <li><strong>Signaux</strong> : chaque événement reçoit un rôle (déclencheur, amplificateur, contexte, client Mirakl, bruit), par des règles relues par un modèle sémantique local.</li>
           <li><strong>Évolutions</strong> (option) : comparaison avec l'analyse précédente.</li>
           <li><strong>Palier</strong> : faut-il l'appeler maintenant ?</li>
           <li><strong>Top {top_n}</strong>, puis les textes rédigés par le LLM si une clé est enregistrée.</li>
@@ -72,6 +72,15 @@ export function DocPage({ rules }: { rules: Config["rules"] }) {
         <p className="text-muted-foreground">
           L'âge d'un signal se compte depuis la date de l'export, pas depuis aujourd'hui : récent jusqu'à {r} jours, moyen jusqu'à {m} jours, ancien au-delà (visible, mais ne classe plus).
         </p>
+      </Block>
+
+      <Block title="Comment le rôle est détecté" description="Des règles par mots-clés, relues par un petit modèle de langage local.">
+        <ol className="list-decimal space-y-1 pl-5">
+          <li><strong>Les règles</strong> cherchent des mots-clés dans le texte de l'événement (« marketplace », « drop-ship », « E-commerce Director »…). La première règle qui correspond donne le rôle.</li>
+          <li><strong>Le modèle sémantique</strong> relit ensuite chaque texte. Gratuit et installé avec l'app, il compare le sens du texte à des phrases d'exemple par rôle et donne un score de proximité. Il comprend les reformulations et le français.</li>
+          <li><strong>Il corrige les règles dans deux cas seulement</strong> : il voit un rôle plus fort avec un score net (par exemple « recrute un responsable des vendeurs partenaires » devient déclencheur), ou un déclencheur ressemble fortement à un contre-exemple (une agence qui recrute pour aider ses clients devient du bruit).</li>
+        </ol>
+        <p className="text-muted-foreground">Chaque signal reclassé est marqué « à relire » dans la fiche. « Mirakl », les levées de fonds et la technologie en place restent jugés par les règles seules. Même modèle, mêmes exemples : mêmes rôles.</p>
       </Block>
 
       <Block title="Les paliers : faut-il appeler maintenant ?">
@@ -124,7 +133,7 @@ export function DocPage({ rules }: { rules: Config["rules"] }) {
             <li>Les signaux datent de l'export : plus il est ancien, plus il faut vérifier en début d'appel.</li>
             <li>L'onglet CRM ne contient pas les clients de Mirakl : les clients ne sont repérés que par les événements.</li>
             <li>Le profil Tamtam (stratégie, e-commerce) est une photo de 2024.</li>
-            <li>Les règles lisent des mots-clés : un poste au service des clients du compte (« E-commerce Strategist to help brands… ») compte encore comme déclencheur.</li>
+            <li>Le modèle sémantique saisit mal certaines nuances (« pour ses clients ») : relire les signaux marqués « à relire ».</li>
           </ul>
         </Block>
       </div>

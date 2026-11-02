@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, Play } from "lucide-react";
+import { Check, Circle, Download, Loader2, Play } from "lucide-react";
 import { api } from "@/api";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -7,13 +7,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AccountSheet, AccountTable, sortAccounts, type Sort, type SortKey } from "@/components/accounts";
 import { EmptyState, PageHeader, StatCard } from "@/components/blocks";
 import { frDate, go, matches, runDate, useLlm } from "@/lib/app";
+import { cn } from "@/lib/utils";
 import type { Account, ExportList, ImportSummary, Job, RunData, Status, Tier } from "@/types";
 
 type View = "top" | "tous" | "surveiller" | "clients";
@@ -136,12 +136,15 @@ function Launcher({ onDone }: { onDone: (run: string) => void }) {
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         {job && job.state !== "idle" && (
-          <div className="space-y-2">
-            {running && <Progress value={null as unknown as number} className="h-1 animate-pulse" />}
+          <div className="space-y-3">
+            {job.steps.length > 0 && <Steps job={job} />}
             <p className={job.state === "error" ? "text-sm text-destructive" : "text-sm"}>
               {job.state === "running" ? "En cours" : job.state === "done" ? "Terminé" : "Échec"}{job.message && ` : ${job.message}`}
             </p>
-            <pre className="max-h-40 overflow-auto rounded-lg bg-muted p-3 text-xs text-muted-foreground">{job.logs.slice(-12).join("\n") || "Démarrage…"}</pre>
+            <details>
+              <summary className="cursor-pointer text-xs text-muted-foreground">Journal détaillé</summary>
+              <pre className="mt-2 max-h-40 overflow-auto rounded-lg bg-muted p-3 text-xs text-muted-foreground">{job.logs.slice(-12).join("\n") || "Démarrage…"}</pre>
+            </details>
           </div>
         )}
       </CardContent>
@@ -155,6 +158,26 @@ const EXPORTS: { liste: ExportList; label: string }[] = [
   { liste: "surveiller", label: "Hors cible à surveiller" },
   { liste: "clients", label: "Clients Mirakl" },
 ];
+
+/** Progression de l'analyse : étapes faites, en cours, à venir. */
+function Steps({ job }: { job: Job }) {
+  const current = job.state === "done" ? job.steps.length : Math.max(0, job.steps.findIndex((s) => s.id === job.step));
+  return (
+    <ol className="grid gap-1.5 text-sm sm:grid-cols-2">
+      {job.steps.map((s, i) => {
+        const done = i < current;
+        const active = i === current && job.state === "running";
+        const failed = i === current && job.state === "error";
+        return (
+          <li key={s.id} className={cn("flex items-center gap-2", !done && !active && "text-muted-foreground", failed && "text-destructive")}>
+            {done ? <Check className="size-4 text-why-green" /> : active ? <Loader2 className="size-4 animate-spin" /> : <Circle className="size-4" />}
+            {s.label}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
 
 function Exports({ data }: { data: RunData }) {
   const url = (liste: ExportList | "complet", format: "xlsx" | "csv") => api.exportUrl(data.meta.run_id, liste, format);

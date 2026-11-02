@@ -20,7 +20,7 @@ docker build -t tamtam-agent .
 docker run -p 8000:8000 -v "$PWD/data:/app/data" -v "$PWD/outputs:/app/outputs" tamtam-agent
 ```
 
-Les volumes `data` et `outputs` conservent les imports et les analyses entre deux lancements.
+Les volumes `data` et `outputs` conservent les imports et les analyses entre deux lancements. Le modèle sémantique (environ 220 Mo) est téléchargé à la construction de l'image ; en local, il l'est à la première analyse, dans `.cache/models/`.
 
 Les données du cas ne sont pas incluses dans le dépôt. Le fichier Excel s'importe depuis l'interface, ou se place dans `data/mirakl_case_data.xlsx` pour la ligne de commande et les tests.
 
@@ -39,11 +39,12 @@ Ligne de commande : `.venv/bin/tamtam-agent run --data export.xlsx` (clé lue da
 ## Règles
 
 - **Statut** : qualifié, à creuser ou disqualifié, selon le secteur, la zone et la taille déclarée.
+- **Signaux** : chaque événement reçoit un rôle (déclencheur, amplificateur, contexte, client Mirakl, bruit) par des règles à mots-clés. Un modèle d'embeddings local et gratuit (`paraphrase-multilingual-MiniLM-L12-v2`, via `fastembed`) relit ensuite chaque texte et corrige les cas nets ; chaque signal reclassé est marqué « à relire ».
 - **Palier** : A, B, C ou D, selon la présence d'un signal d'intention, son ancienneté (moins de 90 ou de 180 jours) et l'existence de signaux qui le renforcent.
 - **Top 20** : paliers A, puis B, complétés par les meilleurs comptes C (marqués « à qualifier »). Aucun compte disqualifié.
 - **Évolutions** (option au lancement) : chaque compte est comparé à la dernière analyse d'un export plus ancien. Le modèle juge si les signaux nouveaux montrent une évolution vers une marketplace : une évolution nette compte comme un déclencheur, une évolution faible comme un amplificateur.
 
-Sans l'option, les règles déterminent seules le classement. Le modèle de langage sert alors uniquement à traduire les événements, rédiger les explications et vérifier certaines informations sur le web. Les seuils sont définis dans `src/tamtam_agent/config.py`.
+Sans l'option, les règles et le modèle sémantique déterminent seuls le classement, sans LLM. Le LLM (Gemini ou Anthropic) sert alors uniquement à traduire les événements, rédiger les explications et vérifier certaines informations sur le web. Les seuils sont définis dans `src/tamtam_agent/config.py`.
 
 ## Structure
 
@@ -54,7 +55,8 @@ src/tamtam_agent/
   importer.py     import : aperçu des feuilles, statistiques, validation
   clean.py        doublons, groupes, pays incohérents
   icp.py          statut (secteur, zone, taille)
-  signals.py      rôle de chaque événement
+  signals.py      rôle de chaque événement (règles)
+  semantic.py     relecture des rôles par le modèle sémantique local
   tiers.py        palier A, B, C ou D
   agent.py        enchaînement des étapes et construction du Top 20
   enrich.py       textes rédigés par le modèle et vérification web

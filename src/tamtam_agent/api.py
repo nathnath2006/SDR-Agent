@@ -174,10 +174,13 @@ class _Job:
         self.state, self.message, self.run, self.import_id = "idle", "", None, None
         self.logs: deque[str] = deque(maxlen=300)
         self.started: str | None = None
+        self.steps: list[str] = []      # étapes prévues (agent.STEPS)
+        self.step: str | None = None    # étape en cours
 
     def as_dict(self) -> dict:
         return {"state": self.state, "message": self.message, "run": self.run, "import_id": self.import_id,
-                "logs": list(self.logs), "started": self.started}
+                "logs": list(self.logs), "started": self.started, "step": self.step,
+                "steps": [{"id": k, "label": agent.STEPS[k]} for k in self.steps]}
 
 
 JOB = _Job()
@@ -186,6 +189,8 @@ JOB = _Job()
 class _JobLogHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
         JOB.logs.append(f"{datetime.now():%H:%M:%S} {record.getMessage()}")
+        if getattr(record, "etape", None):
+            JOB.step = record.etape
 
 
 @app.get("/api/job")
@@ -206,6 +211,8 @@ def analyze(import_id: str, req: AnalyzeRequest) -> dict:
         JOB.state, JOB.message, JOB.run, JOB.import_id = "running", "Analyse en cours", None, import_id
         JOB.logs.clear()
         JOB.started = datetime.now().isoformat(timespec="seconds")
+        JOB.steps = agent.planned_steps(bool(req.llm and req.llm.api_key), req.web, req.evolution)
+        JOB.step = None
     threading.Thread(target=_execute, args=(folder, decisions, req.web, req.evolution, req.llm), daemon=True).start()
     return JOB.as_dict()
 
@@ -222,9 +229,10 @@ def _execute(folder: Path, decisions: dict[str, bool], web: bool, evolution: boo
                            api_key=llm.api_key if llm else None, model=llm.model if llm else None,
                            evolution=evolution)
         result.source = meta["fichier"]
+        logger.info(agent.STEPS["ecriture"], extra={"etape": "ecriture"})
         outputs.write_all(result, OUT_DIR)
         (RUNS_DIR / result.run_id / "import.json").write_text(json.dumps({"import_id": folder.name, **meta}))
-        JOB.run, JOB.state = result.run_id, "done"
+        JOB.run, JOB.state, JOB.step = result.run_id, "done", None
         JOB.message = f"Top {len(result.top)} prêt · LLM : {result.llm_label}"
     except Exception as exc:   # renvoyée telle quelle à l'interface
         JOB.state, JOB.message = "error", f"{type(exc).__name__} : {exc}"

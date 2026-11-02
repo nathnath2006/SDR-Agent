@@ -2,8 +2,13 @@
 
 Les règles décident (statut, palier, ordre) ; le LLM, s'il est configuré, rédige
 les textes et vérifie le web. Même export, mêmes décisions : même Top 20.
+Couche sémantique : un petit modèle local relit les rôles donnés par les règles
+et corrige les cas nets, marqués « à relire » (voir semantic.py).
 Option « évolutions » : le LLM juge l'évolution de chaque compte depuis l'analyse
 précédente ; une évolution nette devient un déclencheur (voir evolution.py).
+
+Chaque étape est annoncée par un log portant `extra={"etape": ...}`, que l'interface
+affiche comme une progression (voir STEPS).
 """
 
 from __future__ import annotations
@@ -15,7 +20,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from . import config, enrich, evolution as evolutions, icp, memory, signals
+from . import config, enrich, evolution as evolutions, icp, memory, semantic, signals
 from .clean import attach_events, build_groups, registered_domain
 from .llm import LLMError, get_llm
 from .load import load_case_data
@@ -23,6 +28,29 @@ from .tiers import TIER_ORDER, assign_tier
 
 log = logging.getLogger(__name__)
 STATUS_ORDER = {config.STATUS_QUALIFIED: 0, config.STATUS_DIG: 1, config.STATUS_DISQUALIFIED: 2}
+
+# Étapes affichées pendant l'analyse : clé -> libellé.
+STEPS = {
+    "donnees": "Lecture de l'export et des regroupements",
+    "modele": "Chargement du modèle d'analyse sémantique",
+    "signaux": "Rôle de chaque événement",
+    "evolutions": "Évolutions depuis l'analyse précédente",
+    "paliers": "Statuts, paliers et Top 20",
+    "web": "Vérification web des comptes du Top",
+    "fiches": "Fiches d'appel",
+    "raisons": "Raisons de chaque compte",
+    "ecriture": "Écriture des résultats",
+}
+
+
+def planned_steps(llm: bool, web: bool, evolution: bool, semantic_layer: bool = True) -> list[str]:
+    skip = {"modele": not semantic_layer, "evolutions": not (evolution and llm), "web": not (llm and web),
+            "fiches": not llm, "raisons": not llm}
+    return [k for k in STEPS if not skip.get(k)]
+
+
+def _step(key: str) -> None:
+    log.info(STEPS[key], extra={"etape": key})
 
 
 @dataclass
@@ -48,9 +76,11 @@ def new_run_id() -> str:
 def run(data_path: Path, out_dir: Path, provider: str = "auto", web: bool = True,
         top_n: int = config.TOP_N, cache_dir: Path | None = None, run_date: date | None = None,
         api_key: str | None = None, group_decisions: dict[str, bool] | None = None,
-        run_id: str | None = None, model: str | None = None, evolution: bool = False) -> RunResult:
+        run_id: str | None = None, model: str | None = None, evolution: bool = False,
+        semantic_layer: bool = True) -> RunResult:
     run_date = run_date or date.today()
     run_id = run_id or new_run_id()
+    _step("donnees")
     data = load_case_data(data_path)
     extraction = data.extraction_date
     run_dir = out_dir / "runs" / run_id
@@ -65,19 +95,31 @@ def run(data_path: Path, out_dir: Path, provider: str = "auto", web: bool = True
     log.info("Groupes : application des regroupements validés")
     groups = build_groups(data.prospects, group_decisions)
     events = attach_events(data.events[data.events["AccountId"].isin(data.prospects["Id"])], groups)
+    if semantic_layer:
+        _step("modele")
+        try:
+            semantic.preload()
+        except Exception as exc:   # modèle absent ou dépendance manquante : règles seules
+            log.warning("Modèle sémantique indisponible (%s) : rôles donnés par les règles seules", exc)
+            semantic_layer = False
+    _step("signaux")
     log.info("Typage de %d événements par les règles", len(events))
     try:
         events = signals.classify_events(events, llm)
     except LLMError as exc:
         log.warning("Traduction des événements impossible (%s) : textes d'origine", exc)
         events = signals.classify_events(events, None)
+    if semantic_layer:
+        events = semantic.refine(events)
 
     verdicts, evolution_info = {}, None
     if evolution:
+        _step("evolutions")
         verdicts, evolution_info = _evolutions(groups, events, extraction, out_dir / "runs", llm)
         if verdicts:
             events = pd.concat([events, evolutions.as_events(verdicts)], ignore_index=True)
 
+    _step("paliers")
     events_by_group = dict(tuple(events.groupby("GroupId")))
     empty = events.iloc[0:0]
     accounts = []
@@ -98,12 +140,16 @@ def run(data_path: Path, out_dir: Path, provider: str = "auto", web: bool = True
 
     if llm:
         checked = top[: config.WEB_CHECK_MAX_ACCOUNTS] if web else []
+        if checked:
+            _step("web")
         for i, a in enumerate(checked, start=1):
             log.info("Vérification web %d/%d : %s", i, len(checked), a["nom"])
             a["verification_web"] = enrich.web_check(a, llm)
+        _step("fiches")
         for i, a in enumerate(top, start=1):
             log.info("Fiche d'appel %d/%d : %s", i, len(top), a["nom"])
             a["pitch"] = enrich.write_pitch(a, llm)
+        _step("raisons")
         reasons = enrich.write_reasons(accounts, llm)
     else:
         log.info("Pas de clé LLM : décisions calculées, aucun texte rédigé")
@@ -176,7 +222,8 @@ def _account(row: pd.Series, fit: icp.IcpResult, tier) -> dict:
         "strategies": row["MemberStrategies"],
         "entites": [f"{n} ({i})" for n, i in zip(row["MemberNames"], row["MemberIds"])],
         "fusion": row["MergeNote"],
-        "a_verifier": fit.to_check,
+        "a_verifier": fit.to_check + [f"Signal à relire, {s['reclasse']} : {s['libelle']}"
+                                      for s in tier.signals if s["reclasse"]],
         "verification_web": None,
         "pitch": None,
         "rang_top": None,

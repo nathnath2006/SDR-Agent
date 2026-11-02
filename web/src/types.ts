@@ -183,4 +183,6 @@ export interface Job {
   import_id: string | null;
   logs: string[];
   started: string | null;
+  step: string | null;                      // étape en cours
+  steps: { id: string; label: string }[];   // étapes prévues
 }

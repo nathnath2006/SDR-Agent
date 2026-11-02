@@ -12,10 +12,12 @@ RUN npm run build
 
 FROM python:3.13-slim
 WORKDIR /app
-ENV PYTHONUNBUFFERED=1 TAMTAM_ROOT=/app PORT=8000
+ENV PYTHONUNBUFFERED=1 TAMTAM_ROOT=/app PORT=8000 TAMTAM_MODELS=/app/models
 COPY pyproject.toml README.md ./
 COPY src/ src/
 RUN pip install --no-cache-dir ".[api,anthropic,gemini]"
+# Modèle sémantique intégré à l'image : pas de téléchargement au démarrage.
+RUN python -c "from tamtam_agent.semantic import preload; preload()"
 COPY --from=web /web/dist web/dist
 RUN mkdir -p data outputs
 EXPOSE 8000

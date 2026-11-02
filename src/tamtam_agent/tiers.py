@@ -46,7 +46,7 @@ def assign_tier(group_events: pd.DataFrame, extraction_date: pd.Timestamp) -> Ti
             "fenetre": _window(age), "type": row.Type, "detail": row.Detail,
             "libelle": row.libelle, "role": row.role,
             "nature": row.nature, "raison": row.raison, "confiance": row.confiance,
-            "regle": row.regle, "origine": row.Origin,
+            "regle": row.regle, "origine": row.Origin, "reclasse": _text(getattr(row, "reclasse", "")),
         })
 
     is_client = any(s["role"] == config.ROLE_CLIENT for s in signals)
@@ -85,6 +85,10 @@ def assign_tier(group_events: pd.DataFrame, extraction_date: pd.Timestamp) -> Ti
         return TierResult("C", f"signal d'intention ancien ({triggers[0]['age_jours']} jours) : à requalifier", False,
                           last_trigger, signals)
     return TierResult("D", f"aucun signal exploitable dans les {config.WINDOW_MAX_DAYS} derniers jours", False, None, signals)
+
+
+def _text(value) -> str:
+    return value if isinstance(value, str) else ""
 
 
 def _window(age_days: int) -> str:

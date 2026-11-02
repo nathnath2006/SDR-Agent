@@ -17,7 +17,7 @@ def result(tmp_path_factory):
     if not DATA.exists():
         pytest.skip("export du cas non versionné")
     out = tmp_path_factory.mktemp("out")
-    return agent.run(DATA, out, provider="none", web=False, run_date=date(2026, 10, 29))
+    return agent.run(DATA, out, provider="none", web=False, run_date=date(2026, 10, 29), semantic_layer=False)
 
 
 @pytest.fixture(scope="module")

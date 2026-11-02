@@ -11,6 +11,10 @@ from __future__ import annotations
 WINDOW_RECENT_DAYS = 90    # palier A / B
 WINDOW_MAX_DAYS = 180      # au-delà, le signal est "ancien" : visible, ne classe plus
 
+# --- Couche sémantique (semantic.py) -------------------------------------------
+SEMANTIC_PROMOTE = 0.65   # le modèle renforce un rôle à partir de ce score
+SEMANTIC_DEMOTE = 0.75    # il rétrograde un déclencheur en bruit à partir de ce score
+
 # --- Taille (D1) -------------------------------------------------------------
 SIZE_MIN = 100
 SIZE_MAX = 1500
